@@ -178,3 +178,11 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Thinking: reasoning deltas printed dimmed with a ~token count, plus per-model-call usage; TUI logs thinking blocks and shows counts in its status bar.
 - Tests: 114 passed, 14 skipped; Ruff and mypy clean.
 - Live (ap-south-1): 14 probes. ok: Haiku 4.5 (in.), Kimi K3 (in.), Kimi K2 thinking, Kimi K2.5, Qwen3 235B/coder 480B/coder 30B/next 80B/VL 235B, Devstral 2. `no_access` (AccessDeniedException, account not entitled): in.anthropic.claude-sonnet-5, claude-opus-5, openai gpt-5.6-luna/terra. Kimi K2 thinking chat showed its reasoning (~44 tokens), per-call usage and `/context` 1,235/262,144. `edge-harness` with `BEDROCK_MODEL_ID=auto` routed to Haiku 4.5 (India tier first). Live failover: a route starting with Sonnet 5 dropped it (no access) and answered with Haiku 4.5 in the same call.
+
+## 2026-11-03 - Session approvals and chat display
+
+- User feedback: typing `yes` for every change was tedious, and the output made it hard to see what changed.
+- Approvals: `all` grants a per-chat standing approval for edits or for commands (separately); `/approve`, `/approve ask`. MCP always asks; non-interactive never approves.
+- Display (Rich, no new dependency): diff and command panels with +/- counts, Markdown replies via `Live`, `> tool target` lines, red failures, dim per-call usage with the serving model, a turn rule with totals, a "Changed this turn" table and `/changes`, header panel, styled prompt. Panels avoid non-cp1252 glyphs after a crash on a legacy console.
+- Tests: 128 passed, 14 skipped; Ruff and mypy clean. Live (Haiku 4.5 via auto, India): header, Markdown reply, tool lines, per-call usage and turn rule rendered; found and fixed reply/usage sharing a line when output is piped. The interactive approval prompt was not exercised live (needs a TTY); its rendering and recording are covered by tests.
+- Security: the AWS account id was redacted from build-log history before the first push (local `filter-branch`; nothing had been pushed). Push to github.com/AditHash/edge-harness-cli was refused: `gh` is logged in as `adeywm`, which has no push permission (403).

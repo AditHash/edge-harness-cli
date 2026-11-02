@@ -92,3 +92,12 @@ of overriding that check.
   between validation and connect.
 - **Retrieval** is lexical and local; it reads through `Workspace`, so protected files are unreachable.
 - **Usage/cost** figures are estimates from user-supplied prices.
+
+## Session approvals (2026-11-03)
+
+Typing `all` at an approval prompt grants a standing approval for one chat process, separately
+for file edits and for sandbox commands. Every later change is still validated (paths, protected
+files, stale-diff and control-character checks) and its diff is still displayed; only the reply is
+skipped. It is reset when a chat starts and by `/approve ask`, is never granted when stdin is not a
+terminal, and never covers MCP calls. Commands under a standing approval still run only in the
+sandbox. Model and repository text is rendered without Rich markup so it cannot fake prompts.
