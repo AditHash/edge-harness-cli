@@ -156,3 +156,22 @@ def test_cli_thinking_meter_counts_and_clears(monkeypatch) -> None:
     hidden.stop()
     assert created[0].stopped and any("thinking: ~200 tokens" in line for line in printed)
     hidden.stop()  # idempotent
+
+
+def test_call_usage_names_the_serving_model() -> None:
+    class Model:
+        def get_config(self):
+            return {"model_id": "in.anthropic.claude-haiku-4-5"}
+
+    class RoutedAgent:
+        model = Model()
+
+        async def stream_async(self, prompt, **kwargs):
+            yield {"event": {"metadata": {"usage": {"inputTokens": 5, "outputTokens": 2}}}}
+            yield {"result": SimpleNamespace(stop_reason="end_turn", invocation_context=None)}
+
+    async def collect():
+        return [event async for event in stream_turn(RoutedAgent(), "hi")]
+
+    call = asyncio.run(collect())[0]
+    assert call.kind == "call_usage" and call.text == "in.anthropic.claude-haiku-4-5"

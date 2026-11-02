@@ -6,6 +6,15 @@ from typing import Any
 from code_harness.contracts import AgentEvent
 
 
+def _model_id(agent: Any) -> str:
+    """The model that served the latest call (the routed choice in auto mode)."""
+    try:
+        model_id = agent.model.get_config().get("model_id", "")
+    except Exception:  # noqa: BLE001 - display only
+        return ""
+    return model_id if isinstance(model_id, str) else ""
+
+
 async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
     manager = getattr(agent, "conversation_manager", None)
@@ -22,7 +31,7 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
             usage = event["event"]["metadata"].get("usage") or {}
             yield AgentEvent(
                 "call_usage",
-                "",
+                _model_id(agent),
                 int(usage.get("inputTokens", 0) or 0),
                 int(usage.get("outputTokens", 0) or 0),
             )
