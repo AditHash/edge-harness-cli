@@ -66,3 +66,23 @@ def changes_table(changes: list[tuple[str, int, int, str]], title: str) -> Table
     for path, added, removed, kind in changes:
         table.add_row(Text(path), kind, str(added), str(removed))
     return table
+
+
+def session_header(*, workspace: str, model: str, session_id: str, guidance: list[str]) -> Panel:
+    """Start-of-chat summary: where we are, which model, how approvals work."""
+    lines = Text()
+    lines.append("workspace  ", style="dim")
+    lines.append(workspace + "\n")
+    lines.append("model      ", style="dim")
+    lines.append(model + "\n")
+    lines.append("session    ", style="dim")
+    lines.append(f"Session: {session_id}\n")
+    if guidance:
+        lines.append("guidance   ", style="dim")
+        lines.append(", ".join(guidance) + "\n")
+    lines.append(
+        "Edits and commands ask first: yes = once, all = rest of session. "
+        "/help lists commands. Conversations are stored locally.",
+        style="dim",
+    )
+    return Panel(lines, title=Text("edge-harness", style="bold"), border_style="green")

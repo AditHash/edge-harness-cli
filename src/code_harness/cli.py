@@ -449,17 +449,19 @@ def chat(
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
-        console.print(f"Session: {session_id}. Conversations are stored locally.")
-        if guidance:
-            console.print(
-                "Selected guidance: " + ", ".join(item.path for item in guidance), markup=False
-            )
+        from code_harness.ui import session_header
+
         console.print(
-            "File changes and sandbox commands require approval. Type /help for commands."
+            session_header(
+                workspace=str(Path(workspace).resolve()),
+                model=current_model or "not configured",
+                session_id=session_id,
+                guidance=[item.path for item in guidance],
+            )
         )
         while True:
             try:
-                prompt = input("You > ").strip()
+                prompt = console.input("[bold green]you >[/bold green] ").strip()
             except EOFError:
                 break
             if prompt in {"/exit", "/quit"}:
