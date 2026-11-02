@@ -102,3 +102,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 
 - Added an opt-in `explore_repo` Strands agent-as-tool, with only the existing guarded repository read tools and a fresh context for each call. Parent request cancellation and usage limits propagate through the installed SDK's agent-as-tool implementation. The feature is off by default and may incur additional model calls.
 - `uv run pytest -q tests/test_streaming.py tests/test_agent.py`: 13 passed, 1 WSL-dependent test skipped. Tests cover actual mocked delegation through the specialist and verify a protected `.env` is not returned. Ruff and mypy passed.
+
+## 2026-11-02 — Explicit project guidance and skills
+
+- Added opt-in `--project-instructions` and repeatable `--skill NAME` for `ask` and `chat`. The guarded workspace reader loads only selected text; no skill scripts execute and selecting guidance does not alter the registered tool permissions.
+- On session restore, the current runtime's system prompt and selected guidance replace the stored prompt, so a prior session cannot silently re-enable outdated guidance or policy instructions.
+- `uv run pytest -q tests/test_instructions.py tests/test_agent.py tests/test_sessions.py`: 19 passed, 1 WSL-dependent test skipped. Ruff and mypy passed. Skill resources beyond the selected `SKILL.md` are not loaded automatically.

@@ -59,6 +59,14 @@ it cannot edit files or run commands. It can make additional model calls. Each
 top-level request has a 20-model-turn and 32,768-output-token soft budget shared
 with the specialist; an individual model response may overshoot a soft token limit.
 
+Project instructions and skills are not loaded automatically. To select them
+for a chat, use `harness chat --project-instructions --skill review`. This reads
+the workspace's `AGENTS.md` and `.agents/skills/review/SKILL.md` through the
+same guarded reader. Up to five skills may be selected by repeating `--skill`.
+Only their text is supplied as guidance; scripts are not executed and the files
+cannot grant capabilities or override approval policy. Select the flags again
+when resuming a session if you want that guidance in the resumed agent.
+
 ## Isolated commands on Windows
 
 The command tool uses a non-root WSL distribution with `/usr/bin/python3` and

@@ -2,16 +2,18 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
 
 from code_harness.approvals import review_command, review_proposal
 from code_harness.config import Settings
+from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
+from code_harness.workspace import Workspace
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
@@ -56,7 +58,9 @@ async def _show_turn(agent: object, prompt: str) -> None:
     console.print()
 
 
-def _make_agent(workspace: Path, session_manager=None) -> Any:
+def _make_agent(
+    workspace: Path, session_manager=None, guidance: list[Guidance] | None = None
+) -> Any:
     from code_harness.agent import create_agent
 
     def review(proposal: Proposal) -> bool:
@@ -80,14 +84,24 @@ def _make_agent(workspace: Path, session_manager=None) -> Any:
         review=review,
         review_command=command_review,
         session_manager=session_manager,
+        guidance=guidance,
     )
 
 
 @app.command()
-def ask(prompt: str, workspace: Path | None = None) -> None:
+def ask(
+    prompt: str,
+    workspace: Path | None = None,
+    project_instructions: bool = False,
+    skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+) -> None:
     """Ask a question about a workspace; edits require approval."""
     try:
-        asyncio.run(_show_turn(_make_agent(workspace or Path.cwd()), prompt))
+        root = workspace or Path.cwd()
+        guidance = load_guidance(
+            Workspace(root), project_instructions=project_instructions, skills=skill or []
+        )
+        asyncio.run(_show_turn(_make_agent(root, guidance=guidance), prompt))
     except KeyboardInterrupt:
         console.print("\nCancelled.")
         raise typer.Exit(130) from None
@@ -99,16 +113,30 @@ def ask(prompt: str, workspace: Path | None = None) -> None:
 
 
 @app.command()
-def chat(workspace: Path | None = None, resume: str | None = None) -> None:
+def chat(
+    workspace: Path | None = None,
+    resume: str | None = None,
+    project_instructions: bool = False,
+    skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+) -> None:
     """Start an interactive conversation; edits require approval."""
     workspace = workspace or Path.cwd()
     try:
         settings = Settings(workspace=workspace)
+        guidance = load_guidance(
+            Workspace(settings.workspace),
+            project_instructions=project_instructions,
+            skills=skill or [],
+        )
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
-        agent = _make_agent(workspace, manager)
+        agent = _make_agent(workspace, manager, guidance)
         console.print(f"Session: {session_id}. Conversations are stored locally.")
+        if guidance:
+            console.print(
+                "Selected guidance: " + ", ".join(item.path for item in guidance), markup=False
+            )
         console.print(
             "File changes and sandbox commands require approval. Type /help for commands."
         )
@@ -126,7 +154,7 @@ def chat(workspace: Path | None = None, resume: str | None = None) -> None:
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
                 manager = sessions.manager(session_id)
-                agent = _make_agent(workspace, manager)
+                agent = _make_agent(workspace, manager, guidance)
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
                 console.print("\n".join(sessions.list()) or "No sessions for this workspace.")
@@ -136,7 +164,7 @@ def chat(workspace: Path | None = None, resume: str | None = None) -> None:
                 candidate = prompt.removeprefix("/resume ").strip()
                 try:
                     candidate_manager = sessions.manager(candidate)
-                    replacement = _make_agent(workspace, candidate_manager)
+                    replacement = _make_agent(workspace, candidate_manager, guidance)
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Cannot resume session ({type(exc).__name__}).[/red]")
                 else:

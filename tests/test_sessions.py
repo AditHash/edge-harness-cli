@@ -9,6 +9,7 @@ from strands.models import Model
 
 from code_harness.agent import create_agent
 from code_harness.config import Settings
+from code_harness.instructions import Guidance
 from code_harness.sessions import Sessions, SQLiteStorage
 from code_harness.streaming import stream_turn
 from code_harness.workspace import WorkspaceError
@@ -130,6 +131,52 @@ def test_compacted_history_is_saved_and_restored(tmp_path: Path) -> None:
     assert "first" not in str(restored.messages)
 
 
+def test_resumed_session_uses_current_guidance_not_stored_system_prompt(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    sessions = Sessions(tmp_path / "state" / "sessions.sqlite", workspace)
+    session_id = sessions.create()
+
+    async def model_stream(messages, *args, **kwargs):
+        yield {"messageStart": {"role": "assistant"}}
+        yield {"contentBlockDelta": {"delta": {"text": "done"}}}
+        yield {"contentBlockStop": {}}
+        yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    def new_model():
+        model = MagicMock(spec=Model)
+        model.stateful = False
+        model.get_config.return_value = {}
+        model.stream.side_effect = model_stream
+        return model
+
+    first = create_agent(
+        Settings(workspace=workspace),
+        model=new_model(),
+        session_manager=sessions.manager(session_id),
+        guidance=[Guidance("AGENTS.md", "previous guidance")],
+    )
+
+    async def send():
+        return [event async for event in stream_turn(first, "hello")]
+
+    asyncio.run(send())
+    resumed = create_agent(
+        Settings(workspace=workspace),
+        model=new_model(),
+        session_manager=sessions.manager(session_id),
+        guidance=[Guidance("AGENTS.md", "current guidance")],
+    )
+    assert "current guidance" in str(resumed.system_prompt)
+    assert "previous guidance" not in str(resumed.system_prompt)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="secure edits currently require Windows")
 def test_failed_turn_does_not_resume_or_replay_approved_edit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -204,7 +251,9 @@ def test_cli_lists_and_resumes_workspace_session(
     root = tmp_path / "repo"
     root.mkdir()
     monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "private"))
-    monkeypatch.setattr(cli, "_make_agent", lambda workspace, session_manager=None: object())
+    monkeypatch.setattr(
+        cli, "_make_agent", lambda workspace, session_manager=None, guidance=None: object()
+    )
     runner = CliRunner()
     first = runner.invoke(cli.app, ["chat", "--workspace", str(root)], input="/sessions\n/exit\n")
     assert first.exit_code == 0
