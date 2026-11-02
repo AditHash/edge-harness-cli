@@ -58,6 +58,29 @@ environment variables win). Before chat starts, credentials are checked with STS
 `GetCallerIdentity` (no inference). If they are missing or expired and you are at a terminal,
 `aws login` runs automatically; otherwise it tells you to run it and stops.
 
+## India / Mumbai models and `auto`
+
+```powershell
+edge-harness --list-models                     # India (in.*) then Mumbai (ap-south-1) models, by context
+edge-harness --probe-models 10                 # check tool support of 10 untested models (small billed calls)
+edge-harness --model auto                      # routed: best model per request, with failover
+edge-harness --model auto --residency india    # only in.* profiles (requests stay in India)
+edge-harness --model auto --residency mumbai   # only models hosted in ap-south-1
+edge-harness --model qwen.qwen3-coder-480b-a35b-v1:0   # or pick one yourself
+```
+
+`auto` ranks India-routed `in.*` profiles first, then Mumbai on-demand models, largest context
+first, among models whose tool-use probe passed. Each model call goes to the best available one;
+if it fails before producing output (no access, throttling, outage, context too large) the call
+moves to the next model. No access drops a model for the session; throttling cools it down for 2
+minutes. Failover never leaves the chosen residency. Context sizes marked `estimate` are
+provider-published; Bedrock may serve less.
+
+Auto-compaction summarizes older messages before a model call once input passes 70% of the
+model's window (`HARNESS_COMPACT_THRESHOLD`); routed mode uses the smallest window in the route.
+`/context` shows usage. The model's thinking is printed dimmed with an estimated token count, and
+each model call prints its input/output tokens (`HARNESS_SHOW_THINKING=false` shows a spinner instead).
+
 ## Configure and run
 
 ```powershell

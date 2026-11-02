@@ -169,3 +169,12 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Fixes: `replace_in_file(path, old_text, new_text)` (exact unique snippet, same diff review and apply path; CRLF files accept `
 ` snippets); `BEDROCK_MAX_TOKENS` setting, default 16384; instructions prefer `replace_in_file`; actionable output-limit and expired-credential messages; Strands SDK warnings (which echoed raw tool input) silenced in the CLI.
 - Tests: 91 passed, 14 skipped; Ruff and mypy clean. Live (Haiku 4.5, ap-south-1, script approval): an 11 KB README intro update used `read_code` then `replace_in_file`, one 10-line diff, 361 output tokens, file updated correctly.
+
+## 2026-11-03 — India/Mumbai model catalog, routed `auto`, auto-compaction, visible thinking
+
+- `catalog.py`: read-only discovery of `in.*` profiles (India tier) and ap-south-1 on-demand text models (Mumbai tier); embeddings/guard/audio/legacy excluded; context from the Strands SDK table ("sdk") or provider-published values ("estimate"); tool-use probe statuses ok / failed / no_access cached in `<state>/model-catalog.json` (sanitized on load).
+- `routing.py`: `RoutedModel` (a Strands `Model`) for `--model auto`: per-call routing over up to 4 probed candidates, tier first then context; failover before first output on no access (dropped), throttling/outage (2-minute cooldown) or context overflow (only larger windows); errors after output are raised, never retried on another model. Compaction uses the smallest live window.
+- Auto-compaction: `SummarizingConversationManager` proactive threshold `HARNESS_COMPACT_THRESHOLD` (0.7), with the correct window passed for SDK-unknown models; `compacted` event and `/context` command.
+- Thinking: reasoning deltas printed dimmed with a ~token count, plus per-model-call usage; TUI logs thinking blocks and shows counts in its status bar.
+- Tests: 114 passed, 14 skipped; Ruff and mypy clean.
+- Live (ap-south-1): 14 probes. ok: Haiku 4.5 (in.), Kimi K3 (in.), Kimi K2 thinking, Kimi K2.5, Qwen3 235B/coder 480B/coder 30B/next 80B/VL 235B, Devstral 2. `no_access` (AccessDeniedException, account not entitled): in.anthropic.claude-sonnet-5, claude-opus-5, openai gpt-5.6-luna/terra. Kimi K2 thinking chat showed its reasoning (~44 tokens), per-call usage and `/context` 1,235/262,144. `edge-harness` with `BEDROCK_MODEL_ID=auto` routed to Haiku 4.5 (India tier first). Live failover: a route starting with Sonnet 5 dropped it (no access) and answered with Haiku 4.5 in the same call.
