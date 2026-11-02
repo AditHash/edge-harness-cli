@@ -79,3 +79,10 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Added a separate deletion tool that shows the deletion diff and requires the same explicit review. Deletion checks the opened file's path, reparse and link state and reviewed digest while holding the same exclusive file and ancestor directory handles, then marks that handle for deletion.
 - `uv run pytest -q tests/test_agent.py tests/test_edits.py`: 17 passed, including a mocked Strands deletion, rejection and stale-content tests. Ruff lint and `uv run mypy src` passed.
 - Non-Windows file mutations remain disabled. Directory creation, independent review, broader filesystem testing and crash-recovery UX are still outstanding.
+
+## 2026-11-02 — Container-free sandbox on Windows through WSL
+
+- After the user clarified that Docker is optional, Docker Desktop was stopped. The implementation uses a WSL Bubblewrap backend instead: a filtered workspace snapshot is extracted into bounded temporary memory, host home and Windows mounts are absent, networking is unshared, the environment is cleared, and the user reviews each command separately. No host shell fallback is present.
+- `HARNESS_TEST_WSL=1 uv run pytest -q tests/test_sandbox.py`: 7 passed with real local WSL. Checks include actual passing and failing unittest runs, blocked outbound networking, hidden host paths and environment canary, unchanged live files, timeout, output cap and cancellation with no remaining test process. The mocked Strands agent also invoked a real approved sandbox command successfully.
+- Default `uv run pytest -q`: 35 passed, 5 WSL-dependent checks skipped. Ruff and mypy passed during integration. The sandbox shares the WSL kernel, trusts its configured distribution, and has per-process memory limits but no aggregate cgroup memory quota. Binary, oversized and inaccessible files are omitted and reported; dependency directories are excluded.
+- Strands Box currently documents Windows and Linux as unsupported. The SDK and Deep Agents both have pluggable sandbox APIs; the current Strands tool uses our audited boundary directly and does not add a second agent loop.

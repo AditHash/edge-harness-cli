@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     aws_region: str | None = None
     aws_profile: str | None = None
     bedrock_model_id: str | None = None
+    sandbox_wsl_distribution: str = "Ubuntu"
     workspace: Path = Field(default_factory=Path.cwd)
 
     @field_validator("workspace")

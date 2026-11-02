@@ -263,3 +263,60 @@ def test_agent_deletion_requires_review(tmp_path: Path, monkeypatch: pytest.Monk
     assert calls == 2
     assert len(reviewed) == 1 and "-old" in reviewed[0]
     assert not target.exists()
+
+
+@pytest.mark.skipif(
+    os.environ.get("HARNESS_TEST_WSL") != "1", reason="WSL sandbox integration is opt-in"
+)
+def test_strands_invokes_approved_isolated_command(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("print('tool-ok')\n")
+    calls = 0
+    observed = []
+    reviewed = []
+
+    async def model_stream(messages, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        observed.append(messages.copy())
+        yield {"messageStart": {"role": "assistant"}}
+        if calls == 1:
+            yield {
+                "contentBlockStart": {
+                    "start": {"toolUse": {"toolUseId": "run1", "name": "run_sandboxed"}}
+                }
+            }
+            yield {
+                "contentBlockDelta": {
+                    "delta": {"toolUse": {"input": json.dumps({"command": "python3 app.py"})}}
+                }
+            }
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Done"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+
+    def review(command):
+        reviewed.append(command)
+        return True
+
+    agent = create_agent(Settings(workspace=tmp_path), model=model, review_command=review)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "run the file")]
+
+    asyncio.run(run())
+    assert reviewed == ["python3 app.py"]
+    assert calls == 2 and "tool-ok" in str(observed[-1])

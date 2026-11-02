@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from code_harness.approvals import review_proposal
+from code_harness.approvals import review_command, review_proposal
 from code_harness.config import Settings
 from code_harness.proposals import Proposal
 from code_harness.streaming import stream_turn
@@ -65,7 +65,15 @@ def _make_agent(workspace: Path) -> object:
             read_reply=input,
         )
 
-    return create_agent(Settings(workspace=workspace), review=review)
+    def command_review(command: str) -> bool:
+        return review_command(
+            command,
+            interactive=sys.stdin.isatty(),
+            display=lambda text: console.print(text, markup=False, highlight=False),
+            read_reply=input,
+        )
+
+    return create_agent(Settings(workspace=workspace), review=review, review_command=command_review)
 
 
 @app.command()

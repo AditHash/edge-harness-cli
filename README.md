@@ -4,8 +4,7 @@ An in-progress terminal coding assistant. The current implementation provides a
 Strands agent backed by an explicitly configured Amazon Bedrock model, plus
 guarded repository tools. On Windows it can propose changes to existing UTF-8
 files, create new files, or delete files after interactive approval. It is not
-yet a complete coding agent: sandbox execution, persistent sessions and MCP are
-not enabled.
+yet a complete coding agent: durable sessions and MCP are not enabled.
 
 ## Install
 
@@ -42,6 +41,26 @@ profile with appropriate OS permissions and keep any remaining recovery file
 private. On other operating systems editing is disabled pending a verified
 equivalent boundary. Non-interactive input cannot approve edits.
 
+## Isolated commands on Windows
+
+The command tool uses a non-root WSL distribution with `/usr/bin/python3` and
+Bubblewrap installed; Docker Desktop is not required. It defaults to the
+`Ubuntu` distribution; set `SANDBOX_WSL_DISTRIBUTION` to select another.
+Every command requires a separate interactive approval. The tool copies allowed
+UTF-8 files into temporary memory-backed storage, excludes protected paths, and
+does not mount the live workspace. Network access is disabled. The result reports
+the exit code, bounded output, stop reason, elapsed time and omitted file count.
+
+The backend applies a 60-second maximum wall timeout, 64 KiB output limits,
+bounded temporary filesystems, and per-process resource limits. It does not
+provide an aggregate memory quota across all processes. It shares the WSL kernel
+and assumes the configured distribution's system tools are trusted. Binary,
+oversized and inaccessible files are omitted, dependencies in `.venv` and
+`node_modules` are not copied, and dependencies are not installed automatically.
+Thus a failed test may reflect the sandbox environment. Commands run only in the
+copy; any source change still requires a separately approved edit. If WSL,
+Bubblewrap or required namespace features are unavailable, execution fails closed.
+
 ## Development
 
 ```powershell
@@ -49,6 +68,13 @@ uv run pytest -q
 uv run ruff check src tests
 uv run ruff format --check src tests
 uv run mypy src
+```
+
+To run the optional WSL isolation tests on a machine with the prerequisites:
+
+```powershell
+$env:HARNESS_TEST_WSL = "1"
+uv run pytest -q tests/test_sandbox.py
 ```
 
 The original requirements and implementation evidence live in

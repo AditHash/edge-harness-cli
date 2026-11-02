@@ -6,6 +6,7 @@
 - `create_harness` accepts a `Model`, `builtin_tools=[]`, and separate `skills`, `memory`, `session`, `builtin_plugins`, and `background_tasks` switches. An offline construction test confirms exactly three custom tools registered when these are disabled.
 - Strands `BedrockModel` accepts `model_id`, `region_name`, and `max_tokens`; `Agent.stream_async` exposes text chunks as `data` events. No live model invocation has been authorized or executed.
 - Deep Agents Code was inspected at commit `311ed7fb0e496b93ca56fb0b8e46ed0e5355600f`: its separation of presentation from runtime, command catalog, threat model, session recovery tests, and trust treatment of project extensions are useful references. Its LangGraph server is not inserted into the Strands loop.
+- The Strands SDK exposes custom sandbox boundaries and a cancellation signal in `ToolContext`; the CLI's WSL Bubblewrap adapter uses a custom Strands tool with that signal. Deep Agents also offers pluggable sandbox backends, but no second agent loop is needed for command execution. Strands Box's published support table currently lists Windows and Linux as unsupported, so it is not used as the local backend. The Harness subagent documentation says the built-in generalist inherits its parent's configuration; it remains disabled until our tool and approval inheritance are verified.
 
 The original documentation pack contained research only. See the implementation observations above and `uv.lock` for the installed versions; do not copy unverified examples blindly.
 
