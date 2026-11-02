@@ -49,7 +49,7 @@ Platform prerequisites:
 ```powershell
 uv tool install --editable .            # puts edge-harness on PATH (~/.local/bin)
 edge-harness --region ap-south-1 --model <model-id>   # first run: saved for next time
-cd C:\path	onyepo; edge-harness              # chat in the current folder
+cd C:/path/to/any/repo; edge-harness         # chat in the current folder
 edge-harness --tui | --resume ID | --show-config | --profile NAME | --no-login
 ```
 
