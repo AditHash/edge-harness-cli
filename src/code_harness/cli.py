@@ -190,6 +190,9 @@ class _ReplyView:
         if self.live is not None:
             self.live.stop()
             self.live = None
+            if not console.is_terminal:
+                # Live leaves the cursor on the last line when output is not a terminal.
+                console.print()
         self.text = ""
 
 
