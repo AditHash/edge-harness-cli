@@ -58,6 +58,16 @@ environment variables win). Before chat starts, credentials are checked with STS
 `GetCallerIdentity` (no inference). If they are missing or expired and you are at a terminal,
 `aws login` runs automatically; otherwise it tells you to run it and stops.
 
+## Chat display and approvals
+
+Each proposed edit appears as a colored diff panel titled with the file and its +/- line counts;
+sandbox commands appear in their own panel. Type `yes` to approve one change, or `all` to approve
+this and every later file change (or command) for the rest of the chat - diffs are still shown,
+`/approve ask` turns it off, and MCP calls always ask. Replies render as Markdown, tool calls show
+their target (`> read_code README.md`), failed tools are red, each model call prints a dim usage
+line, and every turn ends with a token rule plus a "Changed this turn" table. `/changes` lists all
+approved changes in the session.
+
 ## India / Mumbai models and `auto`
 
 ```powershell

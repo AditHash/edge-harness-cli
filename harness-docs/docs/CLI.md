@@ -10,7 +10,7 @@
 | `harness chat` | Interactive Rich session. Same options plus `--resume SESSION_ID`. |
 | `harness tui` | Textual UI. Options: `--workspace`, `--project-instructions`, `--skill`. Approvals are modal; only the literal reply `yes` approves; `Esc` rejects. TUI slash commands: `/usage`, `/exit`. |
 
-Non-interactive stdin never approves anything.
+Non-interactive stdin never approves anything. At an approval prompt type `yes` (this change only) or `all` (this and every later change of the same kind - file edits or sandbox commands - for the rest of the chat; diffs are still shown). MCP calls always ask.
 
 ## Chat slash commands
 
@@ -24,6 +24,8 @@ Non-interactive stdin never approves anything.
 | `/model [ID]` | Show or switch the Bedrock model; access is checked on the next request |
 | `/plan` | Show the agent's recorded task plan |
 | `/context` | Context tokens used vs the model window and the auto-compact point |
+| `/changes` | Table of file changes you approved this session (+/- lines) |
+| `/approve` | Show standing approvals; `/approve ask` clears them |
 | `/usage` | Session token totals; cost only when prices are configured |
 | `/status` | Workspace and session id |
 | `/exit`, `/quit` | Leave |
