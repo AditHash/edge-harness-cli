@@ -6,7 +6,21 @@ import stat
 from pathlib import Path
 
 MAX_FILE_BYTES = 128 * 1024
-PROTECTED = {".git", ".aws", ".ssh", "credentials", "id_rsa", "id_ed25519", ".gnupg"}
+PROTECTED = {
+    ".git",
+    ".aws",
+    ".ssh",
+    ".gnupg",
+    ".azure",
+    ".kube",
+    ".docker",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    "credentials",
+    "id_rsa",
+    "id_ed25519",
+}
 SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".kdbx"}
 
 
@@ -56,7 +70,12 @@ class Workspace:
 
     def path(self, relative: str) -> Path:
         path = Path(relative)
-        if path.is_absolute() or ".." in path.parts or _protected(path.parts):
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or _protected(path.parts)
+            or any(":" in part or any(ord(ch) < 32 for ch in part) for part in path.parts)
+        ):
             raise WorkspaceError("Path is outside the workspace or protected")
         target = self.root / path
         try:
@@ -76,7 +95,12 @@ class Workspace:
 
     def read(self, relative: str) -> str:
         path = self.path(relative)
-        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
         try:
             fd = os.open(path, flags)
             with os.fdopen(fd, "rb") as stream:

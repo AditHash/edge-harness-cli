@@ -12,7 +12,7 @@ def test_read_search_and_protected_paths(tmp_path: Path) -> None:
     assert "return 42" in workspace.read("source.py")
     assert workspace.search("example") == ["source.py:1: def example():"]
     assert ".env" not in workspace.files()
-    for name in (".env", "../other", str(tmp_path.parent / "other")):
+    for name in (".env", ".npmrc", "file.txt:stream", "../other", str(tmp_path.parent / "other")):
         with pytest.raises(WorkspaceError):
             workspace.read(name)
 
