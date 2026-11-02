@@ -26,3 +26,18 @@ def test_symlink_and_hardlink_are_denied(tmp_path: Path) -> None:
         pytest.skip("hard links are unavailable")
     with pytest.raises(WorkspaceError):
         Workspace(tmp_path).read("alias.txt")
+
+
+def test_outside_symlink_is_denied(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("private")
+    try:
+        (root / "link.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+    workspace = Workspace(root)
+    with pytest.raises(WorkspaceError):
+        workspace.read("link.txt")
+    assert "link.txt" not in workspace.files()
