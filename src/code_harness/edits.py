@@ -234,14 +234,16 @@ def apply_reviewed_edit(
     workspace: Workspace, proposal: Proposal, review: Callable[[Proposal], bool]
 ) -> str:
     """Review and apply one file operation, checking authorization at the handle."""
-    if os.name != "nt":
-        raise WorkspaceError("Secure edits currently require Windows")
     fresh = propose(workspace, proposal.path, proposal.new_content)
     if fresh.original_digest != proposal.original_digest or fresh.diff != proposal.diff:
         raise WorkspaceError("Proposal is stale or does not match its diff")
     validate_reviewable(proposal)
     if not review(proposal):
         return "Change rejected; no file was modified."
+    if os.name != "nt":
+        from code_harness.posix_edits import apply_posix
+
+        return apply_posix(workspace, proposal, _journal)
     target = workspace.path(proposal.path)
     if proposal.new_content is None:
         return _delete_reviewed_file(workspace, proposal, target)

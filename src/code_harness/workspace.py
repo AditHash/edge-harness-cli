@@ -3,6 +3,7 @@
 import ctypes
 import os
 import stat
+import sys
 from pathlib import Path
 
 MAX_FILE_BYTES = 128 * 1024
@@ -68,6 +69,11 @@ def _handle_path(fd: int) -> Path:
         elif name.startswith("\\\\?\\"):
             name = name[4:]
         return Path(name).resolve()
+    if sys.platform == "darwin":
+        import fcntl
+
+        raw = fcntl.fcntl(fd, fcntl.F_GETPATH, b"\x00" * 1024)  # type: ignore[attr-defined]
+        return Path(os.fsdecode(raw.split(b"\x00", 1)[0])).resolve()
     proc = Path(f"/proc/self/fd/{fd}")
     if not proc.exists():
         raise WorkspaceError("Handle path verification is unavailable on this platform")

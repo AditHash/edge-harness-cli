@@ -147,7 +147,7 @@ def create_agent(
             )
         )
         instructions += "\nThe optional explore_repo specialist has read-only repository access."
-    if review is not None and os.name == "nt":
+    if review is not None:
         from code_harness.edits import apply_reviewed_edit
         from code_harness.proposals import propose
 
