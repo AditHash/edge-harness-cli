@@ -68,6 +68,7 @@ def test_strands_session_restores_conversation_across_agents(tmp_path: Path) -> 
         model = MagicMock(spec=Model)
         model.stateful = False
         model.get_config.return_value = {}
+        model.estimate_utilization.return_value = 0.0
         model.stream.side_effect = model_stream
         return create_agent(
             Settings(workspace=workspace), model=model, session_manager=sessions.manager(session_id)
@@ -106,6 +107,7 @@ def test_compacted_history_is_saved_and_restored(tmp_path: Path) -> None:
         model = MagicMock(spec=Model)
         model.stateful = False
         model.get_config.return_value = {}
+        model.estimate_utilization.return_value = 0.0
         model.stream.side_effect = model_stream
         return model
 
@@ -115,7 +117,7 @@ def test_compacted_history_is_saved_and_restored(tmp_path: Path) -> None:
     async def send(text):
         return [event async for event in stream_turn(agent, text)]
 
-    for text in ("first", "second", "third"):
+    for text in ("first", "second", "third", "t4", "t5", "t6", "t7", "t8", "t9"):
         asyncio.run(send(text))
     before = len(agent.messages)
     agent.conversation_manager.reduce_context(agent)
@@ -127,7 +129,7 @@ def test_compacted_history_is_saved_and_restored(tmp_path: Path) -> None:
         session_manager=sessions.manager(session_id),
     )
     assert len(restored.messages) == len(agent.messages)
-    assert "third" in str(restored.messages)
+    assert "t9" in str(restored.messages)
     assert "first" not in str(restored.messages)
 
 
@@ -153,6 +155,7 @@ def test_resumed_session_uses_current_guidance_not_stored_system_prompt(tmp_path
         model = MagicMock(spec=Model)
         model.stateful = False
         model.get_config.return_value = {}
+        model.estimate_utilization.return_value = 0.0
         model.stream.side_effect = model_stream
         return model
 
@@ -220,6 +223,7 @@ def test_failed_turn_does_not_resume_or_replay_approved_edit(
         model = MagicMock(spec=Model)
         model.stateful = False
         model.get_config.return_value = {}
+        model.estimate_utilization.return_value = 0.0
         model.stream.side_effect = model_stream
         return create_agent(
             Settings(workspace=workspace),

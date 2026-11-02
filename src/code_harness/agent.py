@@ -8,7 +8,10 @@ from typing import Any
 
 from langchain_core.runnables import RunnableLambda
 from strands import Agent, tool
-from strands.agent.conversation_manager import SlidingWindowConversationManager
+from strands.agent.conversation_manager import (
+    SlidingWindowConversationManager,
+    SummarizingConversationManager,
+)
 from strands.models import BedrockModel, Model
 from strands.session.session_manager import SessionManager
 from strands.tools.mcp.mcp_agent_tool import MCPAgentTool
@@ -196,7 +199,9 @@ def create_agent(
         background_tasks=False,
         caching=False,
         context_manager=False,
-        conversation_manager=SlidingWindowConversationManager(window_size=40, per_turn=True),
+        conversation_manager=SummarizingConversationManager(
+            summary_ratio=0.3, preserve_recent_messages=10, proactive_compression=True
+        ),
         callback_handler=None,
         agent_id="coding-agent",
         hooks=hooks,

@@ -247,7 +247,9 @@ def chat(
                     removed = before - len(agent.messages)
                     if removed:
                         asyncio.run(manager.save_snapshot(agent, is_latest=True))
-                    console.print(f"Removed {removed} older messages; no summary was generated.")
+                    console.print(
+                        f"Compacted {removed} older messages into a model-written summary."
+                    )
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Could not compact session ({type(exc).__name__}).[/red]")
             elif prompt == "/model":

@@ -72,6 +72,7 @@ def test_debug_cycle_fixes_bug_and_reports_real_outcomes(
     model = MagicMock(spec=Model)
     model.stateful = False
     model.get_config.return_value = {}
+    model.estimate_utilization.return_value = 0.0
     model.stream.side_effect = stream
     commands: list[str] = []
     diffs: list[str] = []

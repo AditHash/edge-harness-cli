@@ -89,6 +89,7 @@ def test_mcp_agent_tool_requires_approval_and_is_isolated(tmp_path: Path, approv
         model = MagicMock(spec=Model)
         model.stateful = False
         model.get_config.return_value = {}
+        model.estimate_utilization.return_value = 0.0
         model.stream.side_effect = model_stream
 
         def review(name, payload):

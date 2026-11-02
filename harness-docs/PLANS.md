@@ -68,7 +68,7 @@
 ## Implementation status (2026-11-02, evidence in `harness/build-log.md`)
 
 Done and tested offline (WSL tests opt-in via `HARNESS_TEST_WSL=1`): Phases 0-4; Phase 5 durable
-sessions, `/compact` (sliding window, no summarization), sandboxed opt-in stdio MCP with per-call
+sessions, `/compact` and proactive token-threshold compaction (Strands summarizing manager), sandboxed opt-in stdio MCP with per-call
 approval, read-only Git status/diff, opt-in explorer specialist, project guidance/skills.
 Scenario C (fail -> approved fix -> rerun) is covered by `tests/test_scenarios.py`.
 

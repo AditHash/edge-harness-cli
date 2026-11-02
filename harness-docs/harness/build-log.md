@@ -120,3 +120,13 @@ This file is an **evidence log**, not a place to report intended work as complet
 - `HARNESS_TEST_WSL=1 uv run pytest -q tests/test_sandbox.py tests/test_mcp_integration.py`: 11 passed. Denied call: server never reached; approved call: server reports `isolated` (no `/home`, `/mnt`, `.env`). Remote MCP is not implemented.
 - Git: `git_status` and `git_diff` tools run fixed argv with repo-config program execution disabled and protected paths excluded. `tests/test_git_tools.py` covers protected-file hiding, outside paths, non-repo failure and that malicious `core.fsmonitor`/`diff.external` do not execute.
 - Default suite: 51 passed, 8 skipped (WSL opt-in). Ruff and mypy clean. Git commands from this session needed `-c safe.directory=...` because the repository is owned by another Windows account.
+
+## 2026-11-02 — Summarizing, token-aware compaction
+
+- Replaced the sliding window with Strands `SummarizingConversationManager` (30% oldest messages summarized, 10 recent kept, proactive compression at the SDK default 70% of the model context window). `/compact` now produces a model-written summary, which costs one model call and sends the old messages to the provider. Summaries may carry untrusted tool output forward.
+- Test doubles needed `estimate_utilization`; the compaction test now uses 9 turns. Default suite: 51 passed, 9 skipped; Ruff and mypy clean. Real-model summarization is untested (no authorized Bedrock call).
+
+## 2026-11-02 — Summarizing, token-aware compaction
+
+- Replaced the sliding window with Strands `SummarizingConversationManager` (30% oldest messages summarized, 10 recent kept, proactive compression at the SDK default 70% of the model context window). `/compact` now produces a model-written summary, which costs one model call and sends the old messages to the provider. Summaries may carry untrusted tool output forward.
+- Test doubles needed `estimate_utilization`; the compaction test now uses 9 turns. Default suite: 51 passed, 9 skipped; Ruff and mypy clean. Real-model summarization is untested (no authorized Bedrock call).
