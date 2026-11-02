@@ -38,3 +38,25 @@ def review_proposal(
         )
     except (EOFError, KeyboardInterrupt, OSError):
         return False
+
+
+def review_command(
+    command: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+) -> bool:
+    """Request separate approval for an isolated command."""
+    if not interactive:
+        return False
+    try:
+        display(
+            "Proposed sandbox command (copied workspace, no network):\n"
+            f"{command}\nSandbox changes do not modify the live workspace."
+        )
+        return (
+            read_reply("Run this exact command? Type yes to approve: ").strip().casefold() == "yes"
+        )
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
