@@ -173,3 +173,28 @@ def test_directory_swap_after_review_does_not_change_outside_file(tmp_path: Path
         apply_reviewed_edit(workspace, proposal, swap)
     assert outside_file.read_bytes() == b"old\n"
     assert (root / "original" / "app.py").read_bytes() == b"old\n"
+
+
+def test_deletion_requires_approval_and_rejects_stale_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "app.py"
+    target.write_bytes(b"old\n")
+    workspace = Workspace(root)
+    proposal = propose(workspace, "app.py", None)
+    assert "rejected" in apply_reviewed_edit(workspace, proposal, lambda _: False)
+    assert target.read_bytes() == b"old\n"
+
+    def modify(_):
+        target.write_bytes(b"changed\n")
+        return True
+
+    with pytest.raises(WorkspaceError, match="changed after review"):
+        apply_reviewed_edit(workspace, proposal, modify)
+    assert target.read_bytes() == b"changed\n"
+    proposal = propose(workspace, "app.py", None)
+    assert "Deleted" in apply_reviewed_edit(workspace, proposal, lambda _: True)
+    assert not target.exists()

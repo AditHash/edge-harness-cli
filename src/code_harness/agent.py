@@ -75,11 +75,21 @@ def create_agent(
                 return f"Edit not applied: {exc}"
 
         tools.append(edit_code)
+
+        @tool
+        def delete_code(path: str) -> str:
+            """Propose deleting one existing UTF-8 file; the user must approve the diff."""
+            try:
+                return apply_reviewed_edit(workspace, propose(workspace, path, None), review)
+            except WorkspaceError as exc:
+                return f"Deletion not applied: {exc}"
+
+        tools.append(delete_code)
         instructions = instructions.replace(
             "You have read-only access; do not claim to have edited files or run commands.",
-            "You may propose file creation or changes with edit_code; every change needs user approval. "
+            "You may propose creating, changing or deleting files; every change needs user approval. "
             "Never claim a file changed unless the tool reports success. "
-            "You cannot run commands or delete files.",
+            "You cannot run commands.",
         )
 
     return create_harness(

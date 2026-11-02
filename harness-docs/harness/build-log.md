@@ -73,3 +73,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 - The approved-change tool can now create a file in an existing authorized directory using a create-new exclusive handle, preventing overwrite of a file created during review. A failed write marks the new file for deletion through its open handle; the journal records that the original file was absent.
 - Added tests for rejection, approved creation, a racing existing file and removal of a partially written file. `uv run pytest -q`: 30 passed; Ruff lint and format and `uv run mypy src`: passed.
 - File deletion and non-Windows editing remain disabled. The Windows backend still needs broader filesystem and independent security review.
+
+## 2026-11-02 — Approved file deletion on Windows
+
+- Added a separate deletion tool that shows the deletion diff and requires the same explicit review. Deletion checks the opened file's path, reparse and link state and reviewed digest while holding the same exclusive file and ancestor directory handles, then marks that handle for deletion.
+- `uv run pytest -q tests/test_agent.py tests/test_edits.py`: 17 passed, including a mocked Strands deletion, rejection and stale-content tests. Ruff lint and `uv run mypy src` passed.
+- Non-Windows file mutations remain disabled. Directory creation, independent review, broader filesystem testing and crash-recovery UX are still outstanding.

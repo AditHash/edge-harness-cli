@@ -81,7 +81,7 @@ def _locked_directories(directory: Path) -> Iterator[None]:
             close(handle)
 
 
-def _open_exclusive(path: Path, *, create_new: bool = False) -> int:
+def _open_exclusive(path: Path, *, create_new: bool = False, allow_delete: bool = False) -> int:
     import msvcrt
 
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
@@ -96,7 +96,7 @@ def _open_exclusive(path: Path, *, create_new: bool = False) -> int:
         ctypes.c_void_p,
     ]
     create.restype = ctypes.c_void_p
-    access = 0x80000000 | 0x40000000 | (0x00010000 if create_new else 0)
+    access = 0x80000000 | 0x40000000 | (0x00010000 if create_new or allow_delete else 0)
     handle = create(str(path), access, 0, None, 1 if create_new else 3, 0x00200000, None)
     if handle == ctypes.c_void_p(-1).value:
         raise WorkspaceError("Cannot obtain exclusive access to the target file")
@@ -151,7 +151,7 @@ def _delete_open_file(fd: int) -> None:
     if not set_info(
         msvcrt.get_osfhandle(fd), 4, ctypes.byref(disposition), ctypes.sizeof(disposition)
     ):
-        raise OSError(ctypes.get_last_error(), "Cannot remove newly created file")  # type: ignore[attr-defined]
+        raise OSError(ctypes.get_last_error(), "Cannot remove file through its handle")  # type: ignore[attr-defined]
 
 
 def _create_reviewed_file(workspace: Workspace, proposal: Proposal, target: Path) -> str:
@@ -185,12 +185,55 @@ def _create_reviewed_file(workspace: Workspace, proposal: Proposal, target: Path
     return f"Created approved file {proposal.path}."
 
 
+def _validate_opened_file(workspace: Workspace, target: Path, stream) -> None:
+    info = os.fstat(stream.fileno())
+    actual = _handle_path(stream.fileno())
+    try:
+        actual_parts = actual.relative_to(workspace.root).parts
+    except ValueError:
+        raise WorkspaceError("Opened file is outside the workspace") from None
+    reparse = getattr(info, "st_file_attributes", 0) & getattr(
+        stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400
+    )
+    if (
+        actual != target
+        or _protected(actual_parts)
+        or reparse
+        or not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+    ):
+        raise WorkspaceError("Opened file is protected or is not the reviewed regular file")
+
+
+def _read_reviewed_original(stream, proposal: Proposal) -> bytes:
+    original = stream.read(MAX_FILE_BYTES + 1)
+    if (
+        len(original) > MAX_FILE_BYTES
+        or hashlib.sha256(original).hexdigest() != proposal.original_digest
+    ):
+        raise WorkspaceError("File changed after review; no change was applied")
+    return original
+
+
+def _delete_reviewed_file(workspace: Workspace, proposal: Proposal, target: Path) -> str:
+    with _locked_directories(target.parent):
+        with os.fdopen(_open_exclusive(target, allow_delete=True), "r+b", buffering=0) as stream:
+            _validate_opened_file(workspace, target, stream)
+            original = _read_reviewed_original(stream, proposal)
+            recovery = _journal(workspace.root, proposal.path, original)
+            try:
+                _delete_open_file(stream.fileno())
+            except OSError as error:
+                recovery.unlink(missing_ok=True)
+                raise WorkspaceError("Deletion failed; no change was applied") from error
+        recovery.unlink(missing_ok=True)
+    return f"Deleted approved file {proposal.path}."
+
+
 def apply_reviewed_edit(
     workspace: Workspace, proposal: Proposal, review: Callable[[Proposal], bool]
 ) -> str:
-    """Review and create or replace one file, checking authorization at the handle."""
-    if proposal.new_content is None:
-        raise WorkspaceError("Secure deletion is not yet supported")
+    """Review and apply one file operation, checking authorization at the handle."""
     if os.name != "nt":
         raise WorkspaceError("Secure edits currently require Windows")
     fresh = propose(workspace, proposal.path, proposal.new_content)
@@ -200,35 +243,16 @@ def apply_reviewed_edit(
     if not review(proposal):
         return "Change rejected; no file was modified."
     target = workspace.path(proposal.path)
+    if proposal.new_content is None:
+        return _delete_reviewed_file(workspace, proposal, target)
     if proposal.original_digest is None:
         return _create_reviewed_file(workspace, proposal, target)
     with (
         _locked_directories(target.parent),
         os.fdopen(_open_exclusive(target), "r+b", buffering=0) as stream,
     ):
-        info = os.fstat(stream.fileno())
-        actual = _handle_path(stream.fileno())
-        try:
-            actual_parts = actual.relative_to(workspace.root).parts
-        except ValueError:
-            raise WorkspaceError("Opened file is outside the workspace") from None
-        reparse = getattr(info, "st_file_attributes", 0) & getattr(
-            stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400
-        )
-        if (
-            actual != target
-            or _protected(actual_parts)
-            or reparse
-            or not stat.S_ISREG(info.st_mode)
-            or info.st_nlink != 1
-        ):
-            raise WorkspaceError("Opened file is protected or is not the reviewed regular file")
-        original = stream.read(MAX_FILE_BYTES + 1)
-        if (
-            len(original) > MAX_FILE_BYTES
-            or hashlib.sha256(original).hexdigest() != proposal.original_digest
-        ):
-            raise WorkspaceError("File changed after review; no change was applied")
+        _validate_opened_file(workspace, target, stream)
+        original = _read_reviewed_original(stream, proposal)
         recovery = _journal(workspace.root, proposal.path, original)
         try:
             stream.seek(0)

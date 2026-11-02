@@ -205,3 +205,61 @@ def test_agent_edit_requires_exact_review(
     assert calls == 2
     assert len(shown) == 1 and "-old" in shown[0] and "+new" in shown[0]
     assert target.read_bytes() == expected
+
+
+@pytest.mark.skipif(os.name != "nt", reason="secure edits currently require Windows")
+def test_agent_deletion_requires_review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "app.py"
+    target.write_bytes(b"old\n")
+    calls = 0
+    reviewed = []
+
+    async def model_stream(messages, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        yield {"messageStart": {"role": "assistant"}}
+        if calls == 1:
+            yield {
+                "contentBlockStart": {
+                    "start": {"toolUse": {"toolUseId": "delete1", "name": "delete_code"}}
+                }
+            }
+            yield {
+                "contentBlockDelta": {
+                    "delta": {"toolUse": {"input": json.dumps({"path": "app.py"})}}
+                }
+            }
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Done"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+
+    def review(proposal):
+        reviewed.append(proposal.diff)
+        return True
+
+    agent = create_agent(Settings(workspace=root), model=model, review=review)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "delete the file")]
+
+    asyncio.run(run())
+    assert calls == 2
+    assert len(reviewed) == 1 and "-old" in reviewed[0]
+    assert not target.exists()
