@@ -53,14 +53,14 @@ def _make_agent(workspace: Path) -> object:
 
 
 @app.command()
-def ask(prompt: str, workspace: Path = typer.Option(Path.cwd(), "--workspace")) -> None:
+def ask(prompt: str, workspace: Path | None = None) -> None:
     """Ask a read-only question about a workspace."""
     try:
-        asyncio.run(_show_turn(_make_agent(workspace), prompt))
+        asyncio.run(_show_turn(_make_agent(workspace or Path.cwd()), prompt))
     except KeyboardInterrupt:
         console.print("\nCancelled.")
         raise typer.Exit(130) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - keep provider error contents out of the terminal
         console.print(
             f"[red]Agent failed ({type(exc).__name__}). Check model, region and access.[/red]"
         )
@@ -68,8 +68,9 @@ def ask(prompt: str, workspace: Path = typer.Option(Path.cwd(), "--workspace")) 
 
 
 @app.command()
-def chat(workspace: Path = typer.Option(Path.cwd(), "--workspace")) -> None:
+def chat(workspace: Path | None = None) -> None:
     """Start a read-only interactive conversation."""
+    workspace = workspace or Path.cwd()
     try:
         agent = _make_agent(workspace)
         console.print("Read-only session. Type /help for commands.")
@@ -92,10 +93,10 @@ def chat(workspace: Path = typer.Option(Path.cwd(), "--workspace")) -> None:
                     asyncio.run(_show_turn(agent, prompt))
                 except KeyboardInterrupt:
                     console.print("\nTurn cancelled.")
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
                     console.print(f"[red]Turn failed ({type(exc).__name__}).[/red]")
     except KeyboardInterrupt:
         console.print("\nSession ended.")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - do not expose provider error contents
         console.print(f"[red]Cannot start agent ({type(exc).__name__}); check configuration.[/red]")
         raise typer.Exit(1) from None

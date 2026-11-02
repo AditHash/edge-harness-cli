@@ -1,5 +1,12 @@
 # SDK_NOTES.md — Verify APIs in the installed environment
 
+## Observations during implementation (2026-11-02)
+
+- Python 3.12.10, Strands Harness 0.3.3, Strands Agents 1.63.0; exact dependencies are in `uv.lock`.
+- `create_harness` accepts a `Model`, `builtin_tools=[]`, and separate `skills`, `memory`, `session`, `builtin_plugins`, and `background_tasks` switches. An offline construction test confirms exactly three custom tools registered when these are disabled.
+- Strands `BedrockModel` accepts `model_id`, `region_name`, and `max_tokens`; `Agent.stream_async` exposes text chunks as `data` events. No live model invocation has been authorized or executed.
+- Deep Agents Code was inspected at commit `311ed7fb0e496b93ca56fb0b8e46ed0e5355600f`: its separation of presentation from runtime, command catalog, threat model, session recovery tests, and trust treatment of project extensions are useful references. Its LangGraph server is not inserted into the Strands loop.
+
 **As of 2026-11-02: documentation research only. No SDK has been installed or executed as part of this pack.** Do not copy examples blindly. `uv.lock` must reflect versions tested by Codex in the actual implementation repo.
 
 ## Core dependencies
