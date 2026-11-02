@@ -62,3 +62,19 @@ Official docs:
 - https://strandsagents.com/docs/user-guide/harness/configure/tools-and-instructions/
 - https://strandsagents.com/docs/user-guide/sdk/tools/
 - https://strandsagents.com/docs/user-guide/harness/configure/interventions/
+
+## MCP implementation notes
+
+Local stdio servers only, started inside the WSL Bubblewrap sandbox (no network, copied filtered
+workspace, cleared environment, bounded memory/time/output). Config accepts only `name` and
+`command`. Startup and each tool call are approved separately by a Strands `BeforeToolCallEvent`
+hook that cancels the call on denial or on any approval error; denied calls never reach the server.
+Tool count, definition size and tool names are bounded. MCP output remains untrusted model input.
+Remaining risk: the sandbox shares the WSL kernel and has no aggregate cgroup quota.
+
+## Git inspection notes
+
+`git_status`/`git_diff` run fixed argv on the host with fsmonitor, hooks, external diff, textconv
+and pager disabled, protected paths excluded by pathspec, and a 64 KiB output cap. A repository
+owned by another OS account is refused by Git (`safe.directory`); the tool reports failure instead
+of overriding that check.

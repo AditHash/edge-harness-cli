@@ -50,3 +50,9 @@ The original documentation pack contained research only. See the implementation 
 - https://strandsagents.com/docs/user-guide/harness/configure/interventions/
 - https://docs.langchain.com/oss/python/deepagents/retrieval
 - https://docs.langchain.com/oss/python/langchain/mcp
+
+## Verified during implementation
+
+- `mcp>=2,<3` with `strands.tools.mcp.MCPClient(transport_callable, prefix=...)`; tools are
+  `MCPAgentTool`; `BeforeToolCallEvent.cancel_tool` blocks a call before it runs.
+- Docker is not used; the WSL Bubblewrap backend replaces it (see build log).

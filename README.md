@@ -125,3 +125,10 @@ uv run pytest -q tests/test_sandbox.py
 The original requirements and implementation evidence live in
 [`harness-docs`](harness-docs/README.md) and
 [`harness-docs/harness/build-log.md`](harness-docs/harness/build-log.md).
+
+## Troubleshooting
+
+- `Git unavailable`: install Git, or the repo is owned by another account (Git `safe.directory`).
+- `Sandbox command not run`: WSL distribution missing or `bwrap` absent; set `SANDBOX_WSL_DISTRIBUTION`.
+- `Cannot start agent`: set `AWS_REGION` and `BEDROCK_MODEL_ID`, and run `harness doctor`.
+- WSL integration tests: `$env:HARNESS_TEST_WSL='1'; uv run pytest -q`.
