@@ -35,7 +35,7 @@ def _model_report(agent: Any, configured: str | None) -> str:
     candidates = getattr(model, "candidates", None)
     if configured != "auto" or not candidates:
         return f"Model: {configured}"
-    dropped = getattr(model, "dropped", set())
+    dropped: set[str] = getattr(model, "dropped", set())
     lines = [f"Model: auto (now serving {getattr(model, 'active_id', '?')})", "Route:"]
     for model_id, _, context in candidates:
         size = f"{context:,}" if context else "unknown"
