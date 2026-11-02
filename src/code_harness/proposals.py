@@ -17,6 +17,13 @@ class Proposal:
     diff: str
 
 
+def _diff_lines(content: str) -> list[str]:
+    lines = content.splitlines(keepends=True)
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] += "\n\\ No newline at end of file\n"
+    return lines
+
+
 def propose(workspace: Workspace, path: str, new_content: str | None) -> Proposal:
     target = workspace.path(path)
     if new_content is not None and len(new_content.encode("utf-8")) > MAX_FILE_BYTES:
@@ -35,8 +42,8 @@ def propose(workspace: Workspace, path: str, new_content: str | None) -> Proposa
     new_name = f"b/{path}" if new_content is not None else "/dev/null"
     diff = "".join(
         difflib.unified_diff(
-            original.splitlines(keepends=True),
-            (new_content or "").splitlines(keepends=True),
+            _diff_lines(original),
+            _diff_lines(new_content or ""),
             fromfile=old_name,
             tofile=new_name,
         )

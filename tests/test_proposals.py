@@ -24,3 +24,10 @@ def test_proposals_protect_paths_and_support_create_delete(tmp_path: Path) -> No
         propose(workspace, ".env", "secret")
     with pytest.raises(WorkspaceError):
         propose(workspace, "../outside", "x")
+
+
+def test_diff_marks_missing_terminal_newline(tmp_path: Path) -> None:
+    (tmp_path / "file.txt").write_bytes(b"old")
+    proposal = propose(Workspace(tmp_path), "file.txt", "new")
+    assert "-old\n\\ No newline at end of file\n" in proposal.diff
+    assert "+new\n\\ No newline at end of file\n" in proposal.diff
