@@ -165,38 +165,70 @@ class _ThinkingMeter:
         self.chars = 0
 
 
+class _ReplyView:
+    """Streams the assistant's reply as live-rendered Markdown, one block per text segment."""
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.live: Any = None
+
+    def add(self, delta: str) -> None:
+        from rich.live import Live
+        from rich.markdown import Markdown
+
+        self.text += delta
+        if self.live is None:
+            self.live = Live(Markdown(self.text), console=console, refresh_per_second=8)
+            self.live.start()
+        else:
+            self.live.update(Markdown(self.text))
+
+    def stop(self) -> None:
+        if self.live is not None:
+            self.live.stop()
+            self.live = None
+        self.text = ""
+
+
 async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = None) -> None:
     meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
+    reply = _ReplyView()
     try:
         async for event in stream_turn(agent, prompt):
             if event.kind == "reasoning":
+                reply.stop()
                 meter.add(event.text)
                 continue
             meter.stop()
             if event.kind == "text_delta":
-                console.print(event.text, end="", markup=False, highlight=False, soft_wrap=True)
-            elif event.kind == "tool_started":
-                console.print(f"\n[dim]Tool: {event.text}[/dim]")
+                reply.add(event.text)
+                continue
+            reply.stop()
+            if event.kind == "tool_call":
+                console.print(f"[cyan]  > {escape(event.text)}[/cyan]", highlight=False)
             elif event.kind == "tool_result":
-                console.print(f"[dim]{event.text}[/dim]")
+                if event.text.endswith(": failed"):
+                    console.print(f"[red]  x {escape(event.text)}[/red]", highlight=False)
             elif event.kind == "call_usage":
-                served = f" ({escape(event.text)})" if event.text else ""
+                served = f"{escape(event.text)}  " if event.text else ""
                 console.print(
-                    f"\n[dim]model call{served}: {event.input_tokens:,} in / "
-                    f"{event.output_tokens:,} out[/dim]",
+                    f"[dim]    {served}{event.input_tokens:,} in / {event.output_tokens:,} out[/dim]",
                     highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
                     tracker.add(event.input_tokens, event.output_tokens)
-                console.print(f"\n[dim]{event.text}[/dim]")
+                console.rule(
+                    f"[dim]turn: {event.input_tokens:,} in / {event.output_tokens:,} out[/dim]",
+                    style="dim",
+                )
             elif event.kind == "compacted":
-                console.print(f"\n[cyan]{event.text}[/cyan]")
+                console.print(f"[cyan]{escape(event.text)}[/cyan]")
             elif event.kind == "error":
-                console.print(f"\n[yellow]{event.text}[/yellow]")
+                console.print(f"[yellow]{escape(event.text)}[/yellow]")
     finally:
+        reply.stop()
         meter.stop()
-    console.print()
 
 
 @dataclass(frozen=True)

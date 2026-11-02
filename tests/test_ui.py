@@ -38,3 +38,41 @@ def test_untrusted_markup_is_not_interpreted() -> None:
     text = _render(ui.review_renderable(f"{ui.DIFF_PREFIX}[bold]x[/bold].md\n+[red]hi[/red]\n"))
     assert "[bold]x[/bold].md" in text and "[red]hi[/red]" in text
     assert _render(ui.review_renderable("[blink]plain[/blink]")).strip() == "[blink]plain[/blink]"
+
+
+def test_turn_display_is_compact_and_readable(monkeypatch) -> None:
+    import asyncio
+
+    from code_harness import cli
+    from code_harness.contracts import AgentEvent
+
+    recorder = Console(width=100, record=True, color_system=None, force_terminal=False)
+    monkeypatch.setattr(cli, "console", recorder)
+    events = [
+        AgentEvent("tool_call", "read_code README.md"),
+        AgentEvent("tool_result", "read_code: finished"),
+        AgentEvent("tool_call", "git_diff [x]"),
+        AgentEvent("tool_result", "git_diff: failed"),
+        AgentEvent("call_usage", "in.anthropic.claude-haiku", 1946, 129),
+        AgentEvent("text_delta", "## Summary\n\n- **one**"),
+        AgentEvent("text_delta", "\n- two\n"),
+        AgentEvent("usage", "Input tokens: 2000; output tokens: 150", 2000, 150),
+        AgentEvent("turn_completed"),
+    ]
+
+    async def fake(agent, prompt):
+        for event in events:
+            yield event
+
+    monkeypatch.setattr(cli, "stream_turn", fake)
+    tracker = cli.UsageTracker()
+    asyncio.run(cli._show_turn(object(), "x", tracker))
+    text = recorder.export_text()
+    assert "> read_code README.md" in text
+    assert "read_code: finished" not in text  # successes stay quiet
+    assert "x git_diff: failed" in text
+    assert "> git_diff [x]" in text  # markup in tool targets is shown literally
+    assert "in.anthropic.claude-haiku  1,946 in / 129 out" in text
+    assert "Summary" in text and "## Summary" not in text and "**one**" not in text  # Markdown
+    assert "turn: 2,000 in / 150 out" in text
+    assert tracker.input_tokens == 2000
