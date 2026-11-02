@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from code_harness.approvals import review_command, review_mcp, review_proposal
 from code_harness.config import Settings
@@ -155,9 +156,11 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
             elif event.kind == "tool_result":
                 console.print(f"[dim]{event.text}[/dim]")
             elif event.kind == "call_usage":
+                served = f" ({escape(event.text)})" if event.text else ""
                 console.print(
-                    f"\n[dim]model call: {event.input_tokens:,} in / "
-                    f"{event.output_tokens:,} out[/dim]"
+                    f"\n[dim]model call{served}: {event.input_tokens:,} in / "
+                    f"{event.output_tokens:,} out[/dim]",
+                    highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
