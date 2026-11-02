@@ -50,7 +50,10 @@ def test_real_agent_streams_fake_model_without_cloud(tmp_path: Path) -> None:
         return [event async for event in stream_turn(agent, "hello")]
 
     events = asyncio.run(collect())
-    assert "".join(event.text for event in events) == "Hello from fixture"
+    assert (
+        "".join(event.text for event in events if event.kind == "text_delta")
+        == "Hello from fixture"
+    )
     assert events[-1].kind == "turn_completed"
 
 
