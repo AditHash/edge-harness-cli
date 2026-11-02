@@ -13,7 +13,14 @@ from code_harness.config import Settings
 from code_harness.instructions import Guidance
 from code_harness.streaming import stream_turn
 
-READ_ONLY_TOOLS = {"list_repo", "read_code", "search_code", "git_status", "git_diff"}
+READ_ONLY_TOOLS = {
+    "list_repo",
+    "read_code",
+    "search_code",
+    "git_status",
+    "git_diff",
+    "update_plan",
+}
 
 
 def test_only_guarded_tools_registered(tmp_path: Path) -> None:
@@ -403,3 +410,34 @@ def test_strands_invokes_approved_isolated_command(tmp_path: Path) -> None:
     asyncio.run(run())
     assert reviewed == ["python3 app.py"]
     assert calls == 2 and "tool-ok" in str(observed[-1])
+
+
+def test_plan_validation_and_state_persistence(tmp_path: Path) -> None:
+    from code_harness.planning import render_plan, validate_plan
+
+    with pytest.raises(ValueError):
+        validate_plan([{"step": "a", "status": "in_progress"}] * 2)
+    with pytest.raises(ValueError):
+        validate_plan([{"step": "a", "status": "done"}])
+    plan = validate_plan([{"step": "a", "status": "completed"}, {"step": "b", "status": "pending"}])
+    assert render_plan(plan) == "[x] a\n[ ] b"
+
+
+def test_reviewer_is_read_only_and_tester_needs_sandbox(tmp_path: Path) -> None:
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.estimate_utilization.return_value = 0.0
+    agent = create_agent(
+        Settings(workspace=tmp_path, harness_enable_reviewer=True, harness_enable_tester=True),
+        model=model,
+    )
+    reviewer = agent.tool_registry.registry["review_changes"]._agent
+    assert set(reviewer.tool_registry.registry) == {
+        "list_repo",
+        "read_code",
+        "search_code",
+        "git_status",
+        "git_diff",
+    }
+    assert "run_tests" not in agent.tool_registry.registry

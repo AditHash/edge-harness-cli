@@ -219,7 +219,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /plan  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -277,6 +277,11 @@ def chat(
                     console.print(
                         f"Model changed to {candidate}. Access is checked on the next request."
                     )
+            elif prompt == "/plan":
+                from code_harness.planning import render_plan
+
+                saved = agent.state.get("plan") if hasattr(agent, "state") else None
+                console.print(render_plan(saved) if saved else "No plan recorded.", markup=False)
             elif prompt == "/usage":
                 console.print(tracker.summary(), markup=False)
             elif prompt == "/status":
