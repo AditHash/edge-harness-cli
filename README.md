@@ -53,6 +53,10 @@ access controls. An interrupted or failed turn is not saved as a completed turn;
 an edit already approved during that turn may still have been applied, but it
 will not be automatically replayed on resume.
 
+Use `/model` to display the current model and `/model MODEL_ID` to switch the
+current chat to another Bedrock model or inference profile. The switch preserves
+the completed session; model access is checked on the next inference request.
+
 Set `HARNESS_ENABLE_EXPLORER=true` to expose an optional Strands exploration
 specialist. It receives only the same guarded read tools as the main agent;
 it cannot edit files or run commands. It can make additional model calls. Each

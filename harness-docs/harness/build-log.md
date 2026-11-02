@@ -108,3 +108,8 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Added opt-in `--project-instructions` and repeatable `--skill NAME` for `ask` and `chat`. The guarded workspace reader loads only selected text; no skill scripts execute and selecting guidance does not alter the registered tool permissions.
 - On session restore, the current runtime's system prompt and selected guidance replace the stored prompt, so a prior session cannot silently re-enable outdated guidance or policy instructions.
 - `uv run pytest -q tests/test_instructions.py tests/test_agent.py tests/test_sessions.py`: 19 passed, 1 WSL-dependent test skipped. Ruff and mypy passed. Skill resources beyond the selected `SKILL.md` are not loaded automatically.
+
+## 2026-11-02 — Interactive model selection
+
+- Added `/model MODEL_ID` to switch the current chat's Bedrock model while retaining the completed session, along with `/model` to display the selection. The next inference checks account access; the switch itself does not invoke the model.
+- `uv run pytest -q tests/test_sessions.py`: 7 passed. Ruff and mypy passed. A real Bedrock model switch has not been tested because a live inference call has not been authorized.

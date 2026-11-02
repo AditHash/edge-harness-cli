@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Annotated, Any
@@ -59,7 +60,10 @@ async def _show_turn(agent: object, prompt: str) -> None:
 
 
 def _make_agent(
-    workspace: Path, session_manager=None, guidance: list[Guidance] | None = None
+    workspace: Path,
+    session_manager=None,
+    guidance: list[Guidance] | None = None,
+    model_id: str | None = None,
 ) -> Any:
     from code_harness.agent import create_agent
 
@@ -79,8 +83,11 @@ def _make_agent(
             read_reply=input,
         )
 
+    settings = Settings(workspace=workspace)
+    if model_id is not None:
+        settings = settings.model_copy(update={"bedrock_model_id": model_id})
     return create_agent(
-        Settings(workspace=workspace),
+        settings,
         review=review,
         review_command=command_review,
         session_manager=session_manager,
@@ -123,6 +130,7 @@ def chat(
     workspace = workspace or Path.cwd()
     try:
         settings = Settings(workspace=workspace)
+        current_model = settings.bedrock_model_id
         guidance = load_guidance(
             Workspace(settings.workspace),
             project_instructions=project_instructions,
@@ -131,7 +139,7 @@ def chat(
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
-        agent = _make_agent(workspace, manager, guidance)
+        agent = _make_agent(workspace, manager, guidance, current_model)
         console.print(f"Session: {session_id}. Conversations are stored locally.")
         if guidance:
             console.print(
@@ -149,12 +157,12 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model  /status  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
                 manager = sessions.manager(session_id)
-                agent = _make_agent(workspace, manager, guidance)
+                agent = _make_agent(workspace, manager, guidance, current_model)
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
                 console.print("\n".join(sessions.list()) or "No sessions for this workspace.")
@@ -164,7 +172,7 @@ def chat(
                 candidate = prompt.removeprefix("/resume ").strip()
                 try:
                     candidate_manager = sessions.manager(candidate)
-                    replacement = _make_agent(workspace, candidate_manager, guidance)
+                    replacement = _make_agent(workspace, candidate_manager, guidance, current_model)
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Cannot resume session ({type(exc).__name__}).[/red]")
                 else:
@@ -183,7 +191,24 @@ def chat(
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Could not compact session ({type(exc).__name__}).[/red]")
             elif prompt == "/model":
-                console.print(f"Model: {settings.bedrock_model_id or 'not configured'}")
+                console.print(f"Model: {current_model or 'not configured'}")
+            elif prompt.startswith("/model "):
+                candidate = prompt.removeprefix("/model ").strip()
+                if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}", candidate):
+                    console.print("[red]Invalid Bedrock model or inference profile ID.[/red]")
+                    continue
+                try:
+                    candidate_manager = sessions.manager(session_id)
+                    replacement = _make_agent(workspace, candidate_manager, guidance, candidate)
+                except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
+                    console.print(f"[red]Cannot switch model ({type(exc).__name__}).[/red]")
+                else:
+                    agent = replacement
+                    manager = candidate_manager
+                    current_model = candidate
+                    console.print(
+                        f"Model changed to {candidate}. Access is checked on the next request."
+                    )
             elif prompt == "/status":
                 console.print(f"Workspace: {workspace.resolve()}; session: {session_id}")
             elif prompt.startswith("/"):

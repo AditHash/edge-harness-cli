@@ -252,7 +252,9 @@ def test_cli_lists_and_resumes_workspace_session(
     root.mkdir()
     monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "private"))
     monkeypatch.setattr(
-        cli, "_make_agent", lambda workspace, session_manager=None, guidance=None: object()
+        cli,
+        "_make_agent",
+        lambda workspace, session_manager=None, guidance=None, model_id=None: object(),
     )
     runner = CliRunner()
     first = runner.invoke(cli.app, ["chat", "--workspace", str(root)], input="/sessions\n/exit\n")
@@ -267,3 +269,30 @@ def test_cli_lists_and_resumes_workspace_session(
         input="/status\n/exit\n",
     )
     assert second.exit_code == 0 and session_id in second.output
+
+
+def test_cli_model_switch_is_explicit_and_preserves_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from code_harness import cli
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "private"))
+    models = []
+
+    def make_agent(workspace, session_manager=None, guidance=None, model_id=None):
+        models.append(model_id)
+        return object()
+
+    monkeypatch.setattr(cli, "_make_agent", make_agent)
+    result = CliRunner().invoke(
+        cli.app,
+        ["chat", "--workspace", str(root)],
+        input="/model us.example-v1\n/model\n/exit\n",
+    )
+    assert result.exit_code == 0
+    assert models[-1] == "us.example-v1"
+    assert "Model: us.example-v1" in result.output
