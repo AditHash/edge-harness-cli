@@ -78,6 +78,7 @@ class RoutedModel(Model):
         self.dropped: set[str] = set()
         self.cooldown_until: dict[str, float] = {}
         self.active_id = candidates[0][0]
+        self._announced: str | None = None
 
     # -- routing ---------------------------------------------------------------------------
     def _available(self, minimum_context: int = 0) -> list[tuple[str, Model, int | None]]:
@@ -112,8 +113,10 @@ class RoutedModel(Model):
                 raise ContextWindowOverflowException("No routed model can hold this context")
             model_id, model, context = pool[0]
             tried.add(model_id)
-            if model_id != self.active_id:
+            if model_id != self._announced:
+                # Announce the first pick and every later switch.
                 self.notify(f"Auto routing: using {model_id}")
+                self._announced = model_id
             self.active_id = model_id
             started = False
             try:

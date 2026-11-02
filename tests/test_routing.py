@@ -151,3 +151,15 @@ def test_model_report_shows_route_and_active_model() -> None:
     assert "in.b (context unknown) - skipped (no access)" in report
     assert _model_report(SimpleNamespace(model=None), "m1") == "Model: m1"
     assert _model_report(SimpleNamespace(model=None), None) == "Model: not configured"
+
+
+def test_first_pick_and_switches_are_announced_once() -> None:
+    notes: list[str] = []
+    first, second = FakeModel("a"), FakeModel("b")
+    routed = RoutedModel([("a", first, 10), ("b", second, 10)], notify=notes.append)
+    _collect(routed)
+    _collect(routed)
+    assert notes == ["Auto routing: using a"]
+    routed.dropped.add("a")
+    _collect(routed)
+    assert notes[-1] == "Auto routing: using b" and len(notes) == 2
