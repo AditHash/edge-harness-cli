@@ -25,7 +25,7 @@ def diff_stats(diff: str) -> tuple[int, int]:
 
 def diff_panel(path: str, diff: str) -> Panel:
     added, removed = diff_stats(diff)
-    title = Text.assemble(("✎ ", "bold yellow"), (path, "bold"))
+    title = Text.assemble(("edit ", "bold yellow"), (path, "bold"))
     subtitle = Text.assemble((f"+{added}", "green"), " ", (f"-{removed}", "red"))
     body = Syntax(diff.rstrip("\n"), "diff", theme="ansi_dark", word_wrap=True)
     return Panel(body, title=title, subtitle=subtitle, border_style="yellow", expand=True)
@@ -34,7 +34,7 @@ def diff_panel(path: str, diff: str) -> Panel:
 def command_panel(command: str) -> Panel:
     body = Group(
         Syntax(command, "bash", theme="ansi_dark", word_wrap=True),
-        Text("copied workspace · no network · live files unchanged", style="dim"),
+        Text("copied workspace, no network, live files unchanged", style="dim"),
     )
     title = Text.assemble(("$ ", "bold cyan"), ("sandbox command", "bold"))
     return Panel(body, title=title, border_style="cyan", expand=True)
