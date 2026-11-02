@@ -136,3 +136,18 @@ def test_create_agent_builds_router_from_probed_cache(tmp_path) -> None:
     ]
     mumbai_only = create_agent(settings.model_copy(update={"harness_residency": "mumbai"}))
     assert [c[0] for c in mumbai_only.model.candidates] == ["qwen.qwen3-coder-480b-a35b-v1:0"]
+
+
+def test_model_report_shows_route_and_active_model() -> None:
+    from types import SimpleNamespace
+
+    from code_harness.cli import _model_report
+
+    routed = RoutedModel([("in.a", FakeModel("a"), 200_000), ("in.b", FakeModel("b"), None)])
+    routed.dropped.add("in.b")
+    report = _model_report(SimpleNamespace(model=routed), "auto")
+    assert "now serving in.a" in report
+    assert "in.a (context 200,000)" in report
+    assert "in.b (context unknown) - skipped (no access)" in report
+    assert _model_report(SimpleNamespace(model=None), "m1") == "Model: m1"
+    assert _model_report(SimpleNamespace(model=None), None) == "Model: not configured"

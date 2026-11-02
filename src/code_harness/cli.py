@@ -27,6 +27,23 @@ app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
 
 
+def _model_report(agent: Any, configured: str | None) -> str:
+    """Configured model; in auto mode also the route and which model is serving now."""
+    if not configured:
+        return "Model: not configured"
+    model = getattr(agent, "model", None)
+    candidates = getattr(model, "candidates", None)
+    if configured != "auto" or not candidates:
+        return f"Model: {configured}"
+    dropped = getattr(model, "dropped", set())
+    lines = [f"Model: auto (now serving {getattr(model, 'active_id', '?')})", "Route:"]
+    for model_id, _, context in candidates:
+        size = f"{context:,}" if context else "unknown"
+        state = " - skipped (no access)" if model_id in dropped else ""
+        lines.append(f"  {model_id} (context {size}){state}")
+    return "\n".join(lines)
+
+
 def _context_report(agent: Any, settings: Settings) -> str:
     """Current context use against the model's window and the auto-compact threshold."""
     model = getattr(agent, "model", None)
@@ -413,7 +430,7 @@ def chat(
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Could not compact session ({type(exc).__name__}).[/red]")
             elif prompt == "/model":
-                console.print(f"Model: {current_model or 'not configured'}")
+                console.print(_model_report(agent, current_model), markup=False)
             elif prompt.startswith("/model "):
                 candidate = prompt.removeprefix("/model ").strip()
                 if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}", candidate):
