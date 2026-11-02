@@ -254,7 +254,9 @@ def test_cli_lists_and_resumes_workspace_session(
     monkeypatch.setattr(
         cli,
         "_make_agent",
-        lambda workspace, session_manager=None, guidance=None, model_id=None: object(),
+        lambda workspace, session_manager=None, guidance=None, model_id=None, mcp_tools=None: (
+            object()
+        ),
     )
     runner = CliRunner()
     first = runner.invoke(cli.app, ["chat", "--workspace", str(root)], input="/sessions\n/exit\n")
@@ -283,7 +285,7 @@ def test_cli_model_switch_is_explicit_and_preserves_session(
     monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "private"))
     models = []
 
-    def make_agent(workspace, session_manager=None, guidance=None, model_id=None):
+    def make_agent(workspace, session_manager=None, guidance=None, model_id=None, mcp_tools=None):
         models.append(model_id)
         return object()
 

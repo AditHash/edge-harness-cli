@@ -60,3 +60,23 @@ def review_command(
         )
     except (EOFError, KeyboardInterrupt, OSError):
         return False
+
+
+def review_mcp(
+    action: str,
+    details: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+) -> bool:
+    """Review a sandboxed MCP server launch or exact tool call."""
+    if not interactive:
+        return False
+    try:
+        display(
+            f"MCP {action}:\n{details}\nServer runs in a copied workspace without network access."
+        )
+        return read_reply("Approve this MCP action? Type yes: ").strip().casefold() == "yes"
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False

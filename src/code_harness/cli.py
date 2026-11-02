@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import json
 import os
 import re
 import sys
@@ -8,13 +10,13 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 
-from code_harness.approvals import review_command, review_proposal
+from code_harness.approvals import review_command, review_mcp, review_proposal
 from code_harness.config import Settings
 from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
-from code_harness.workspace import Workspace
+from code_harness.workspace import Workspace, WorkspaceError
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
@@ -64,6 +66,7 @@ def _make_agent(
     session_manager=None,
     guidance: list[Guidance] | None = None,
     model_id: str | None = None,
+    mcp_tools: list[Any] | None = None,
 ) -> Any:
     from code_harness.agent import create_agent
 
@@ -83,6 +86,15 @@ def _make_agent(
             read_reply=input,
         )
 
+    def mcp_review(name: str, arguments: str) -> bool:
+        return review_mcp(
+            f"tool call {name}",
+            arguments,
+            interactive=sys.stdin.isatty(),
+            display=lambda text: console.print(text, markup=False, highlight=False),
+            read_reply=input,
+        )
+
     settings = Settings(workspace=workspace)
     if model_id is not None:
         settings = settings.model_copy(update={"bedrock_model_id": model_id})
@@ -92,7 +104,42 @@ def _make_agent(
         review_command=command_review,
         session_manager=session_manager,
         guidance=guidance,
+        mcp_tools=mcp_tools,
+        mcp_review=mcp_review if mcp_tools else None,
     )
+
+
+def _open_mcp(
+    stack: contextlib.ExitStack, config_path: Path | None, settings: Settings
+) -> list[Any]:
+    if config_path is None:
+        return []
+    from code_harness.mcp_integration import connect_sandboxed_mcp, load_mcp_config
+
+    config = load_mcp_config(config_path)
+    details = json.dumps(
+        {"name": config.name, "command": config.command}, ensure_ascii=True, indent=2
+    )
+    if not review_mcp(
+        "server startup",
+        details,
+        interactive=sys.stdin.isatty(),
+        display=lambda text: console.print(text, markup=False, highlight=False),
+        read_reply=input,
+    ):
+        raise WorkspaceError("MCP server startup was not approved")
+    tools, omitted = stack.enter_context(
+        connect_sandboxed_mcp(
+            Workspace(settings.workspace),
+            config,
+            settings.harness_state_dir / "mcp-temp",
+            distro=settings.sandbox_wsl_distribution,
+        )
+    )
+    console.print(
+        f"MCP server {config.name}: {len(tools)} tools; {omitted} snapshot files omitted."
+    )
+    return tools
 
 
 @app.command()
@@ -101,6 +148,7 @@ def ask(
     workspace: Path | None = None,
     project_instructions: bool = False,
     skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+    mcp_config: Path | None = None,
 ) -> None:
     """Ask a question about a workspace; edits require approval."""
     try:
@@ -108,10 +156,17 @@ def ask(
         guidance = load_guidance(
             Workspace(root), project_instructions=project_instructions, skills=skill or []
         )
-        asyncio.run(_show_turn(_make_agent(root, guidance=guidance), prompt))
+        with contextlib.ExitStack() as stack:
+            mcp_tools = _open_mcp(stack, mcp_config, Settings(workspace=root))
+            asyncio.run(
+                _show_turn(_make_agent(root, guidance=guidance, mcp_tools=mcp_tools), prompt)
+            )
     except KeyboardInterrupt:
         console.print("\nCancelled.")
         raise typer.Exit(130) from None
+    except WorkspaceError as exc:
+        console.print(str(exc), markup=False)
+        raise typer.Exit(1) from None
     except Exception as exc:  # noqa: BLE001 - keep provider error contents out of the terminal
         console.print(
             f"[red]Agent failed ({type(exc).__name__}). Check model, region and access.[/red]"
@@ -125,9 +180,11 @@ def chat(
     resume: str | None = None,
     project_instructions: bool = False,
     skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+    mcp_config: Path | None = None,
 ) -> None:
     """Start an interactive conversation; edits require approval."""
     workspace = workspace or Path.cwd()
+    stack = contextlib.ExitStack()
     try:
         settings = Settings(workspace=workspace)
         current_model = settings.bedrock_model_id
@@ -136,10 +193,11 @@ def chat(
             project_instructions=project_instructions,
             skills=skill or [],
         )
+        mcp_tools = _open_mcp(stack, mcp_config, settings)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
-        agent = _make_agent(workspace, manager, guidance, current_model)
+        agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
         console.print(f"Session: {session_id}. Conversations are stored locally.")
         if guidance:
             console.print(
@@ -162,7 +220,7 @@ def chat(
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
                 manager = sessions.manager(session_id)
-                agent = _make_agent(workspace, manager, guidance, current_model)
+                agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
                 console.print("\n".join(sessions.list()) or "No sessions for this workspace.")
@@ -172,7 +230,9 @@ def chat(
                 candidate = prompt.removeprefix("/resume ").strip()
                 try:
                     candidate_manager = sessions.manager(candidate)
-                    replacement = _make_agent(workspace, candidate_manager, guidance, current_model)
+                    replacement = _make_agent(
+                        workspace, candidate_manager, guidance, current_model, mcp_tools
+                    )
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Cannot resume session ({type(exc).__name__}).[/red]")
                 else:
@@ -199,7 +259,9 @@ def chat(
                     continue
                 try:
                     candidate_manager = sessions.manager(session_id)
-                    replacement = _make_agent(workspace, candidate_manager, guidance, candidate)
+                    replacement = _make_agent(
+                        workspace, candidate_manager, guidance, candidate, mcp_tools
+                    )
                 except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
                     console.print(f"[red]Cannot switch model ({type(exc).__name__}).[/red]")
                 else:
@@ -222,6 +284,11 @@ def chat(
                     console.print(f"[red]Turn failed ({type(exc).__name__}).[/red]")
     except KeyboardInterrupt:
         console.print("\nSession ended.")
+    except WorkspaceError as exc:
+        console.print(str(exc), markup=False)
+        raise typer.Exit(1) from None
     except Exception as exc:  # noqa: BLE001 - do not expose provider error contents
         console.print(f"[red]Cannot start agent ({type(exc).__name__}); check configuration.[/red]")
         raise typer.Exit(1) from None
+    finally:
+        stack.close()

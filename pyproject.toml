@@ -3,7 +3,15 @@ name = "edge-code-harness"
 version = "0.1.0"
 description = "A security-conscious terminal coding agent"
 requires-python = ">=3.12"
-dependencies = ["typer>=0.16", "rich>=14", "pydantic-settings>=2.10", "strands-harness", "strands-agents", "langchain-core"]
+dependencies = [
+    "typer>=0.16",
+    "rich>=14",
+    "pydantic-settings>=2.10",
+    "strands-harness",
+    "strands-agents",
+    "langchain-core",
+    "mcp>=2,<3",
+]
 
 [project.scripts]
 harness = "code_harness.cli:app"
