@@ -35,3 +35,6 @@ line-length = 100
 python_version = "3.12"
 check_untyped_defs = true
 
+
+[tool.pytest.ini_options]
+norecursedirs = ["tests/fixtures", ".venv"]

@@ -23,6 +23,7 @@ from code_harness.instructions import Guidance
 from code_harness.planning import render_plan, validate_plan
 from code_harness.platforms import sandbox_backend
 from code_harness.proposals import Proposal
+from code_harness.retrieval import WorkspaceRetriever, format_documents
 from code_harness.workspace import MAX_DISCOVERY_FILES, Workspace, WorkspaceError
 
 INSTRUCTIONS = """You are a coding assistant. Inspect relevant files before answering and cite
@@ -78,6 +79,16 @@ def create_agent(
         except WorkspaceError as exc:
             return f"Search failed: {exc}"
 
+    retriever = WorkspaceRetriever(workspace=workspace, k=5)
+
+    @tool
+    def find_relevant_code(question: str) -> str:
+        """Rank code chunks for a natural-language question; results cite path and line."""
+        try:
+            return format_documents(retriever.invoke(question))
+        except WorkspaceError as exc:
+            return f"Search failed: {exc}"
+
     @tool
     def git_status() -> str:
         """Show read-only Git branch and change status for the workspace."""
@@ -105,7 +116,15 @@ def create_agent(
         tool_context.agent.state.set("plan", plan)
         return render_plan(plan)
 
-    tools: list[Any] = [list_repo, read_code, search_code, git_status, git_diff, update_plan]
+    tools: list[Any] = [
+        list_repo,
+        read_code,
+        search_code,
+        git_status,
+        git_diff,
+        update_plan,
+        find_relevant_code,
+    ]
     hooks: list[Any] = []
     sandbox_tools: dict[str, Any] = {}
     instructions = INSTRUCTIONS
