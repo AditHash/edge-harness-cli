@@ -105,3 +105,19 @@ def test_command_session_approval(tmp_path: Path) -> None:
         read_reply=lambda _: pytest.fail("asked"),
         session=session,
     )
+
+
+def test_chat_approve_command_reports_and_clears(tmp_path: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from code_harness import cli
+
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(cli, "_make_agent", lambda *a, **k: object())
+    cli.SESSION_APPROVALS.edits = True  # left over from an earlier chat
+    result = CliRunner().invoke(
+        cli.app, ["chat", "--workspace", str(tmp_path)], input="/approve\n/approve ask\n/exit\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert "File changes: ask each time" in result.output  # reset when the chat started
+    assert "Standing approvals cleared" in result.output

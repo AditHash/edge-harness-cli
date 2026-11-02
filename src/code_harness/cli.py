@@ -14,7 +14,12 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
-from code_harness.approvals import review_command, review_mcp, review_proposal
+from code_harness.approvals import (
+    SessionApprovals,
+    review_command,
+    review_mcp,
+    review_proposal,
+)
 from code_harness.config import Settings
 from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
@@ -25,6 +30,8 @@ from code_harness.workspace import Workspace, WorkspaceError
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
+# Standing approvals granted with `all`; reset when a chat starts.
+SESSION_APPROVALS = SessionApprovals()
 
 
 def _model_report(agent: Any, configured: str | None) -> str:
@@ -225,13 +232,21 @@ def _make_agent(
     def review(proposal: Proposal) -> bool:
         ui = io()
         return review_proposal(
-            proposal, interactive=ui.interactive, display=ui.display, read_reply=ui.read_reply
+            proposal,
+            interactive=ui.interactive,
+            display=ui.display,
+            read_reply=ui.read_reply,
+            session=SESSION_APPROVALS,
         )
 
     def command_review(command: str) -> bool:
         ui = io()
         return review_command(
-            command, interactive=ui.interactive, display=ui.display, read_reply=ui.read_reply
+            command,
+            interactive=ui.interactive,
+            display=ui.display,
+            read_reply=ui.read_reply,
+            session=SESSION_APPROVALS,
         )
 
     def mcp_review(name: str, arguments: str) -> bool:
@@ -372,6 +387,7 @@ def chat(
         mcp_tools = _open_mcp(stack, mcp_config, settings)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
+        SESSION_APPROVALS.reset()
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
@@ -392,7 +408,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /approve [ask]  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -455,6 +471,11 @@ def chat(
 
                 saved = agent.state.get("plan") if hasattr(agent, "state") else None
                 console.print(render_plan(saved) if saved else "No plan recorded.", markup=False)
+            elif prompt == "/approve":
+                console.print(SESSION_APPROVALS.describe(), markup=False)
+            elif prompt == "/approve ask":
+                SESSION_APPROVALS.reset()
+                console.print("Standing approvals cleared. " + SESSION_APPROVALS.describe())
             elif prompt == "/usage":
                 console.print(tracker.summary(), markup=False)
             elif prompt == "/context":
