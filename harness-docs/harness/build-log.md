@@ -156,3 +156,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 - F: model called the sandboxed fixture MCP tool `fixture_probe` once after approval and reported `isolated`. 3150 in / 62 out.
 - TUI: headless Textual pilot, one real streamed turn, usage tracked (1462 in / 4 out).
 - RESULTS: B, C, F, TUI all True. Human-typed approval at a real TTY was not exercised; the approval functions themselves are covered by offline tests.
+
+## 2026-11-03 — `edge-harness` launcher
+
+- New entry point `edge-harness` (`code_harness/launcher.py`): chat (or `--tui`) in the current folder; `--region/--model/--profile` validated and saved atomically to `<HARNESS_STATE_DIR>/settings.json` (0600, no credentials, tampered values ignored, env wins); STS `GetCallerIdentity` pre-check; interactive `aws login [--profile] [--region]` when credentials are missing/expired, then re-check; non-interactive stops with a message.
+- `tests/test_launcher.py`: 12 passed. Full default suite 89 passed, 14 skipped. Ruff and mypy clean.
+- Installed with `uv tool install --editable .` (user tools dir). Live: saved ap-south-1 + Haiku 4.5, ran `edge-harness` from `.live-smoke/launcher` with no env vars; chat replied `ok` (1773 in / 4 out). With a nonexistent profile and piped stdin it refused with the login message. The automatic interactive `aws login` path was not exercised live (credentials were valid); it is unit-tested with injected check/login functions.

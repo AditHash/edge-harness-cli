@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 harness = "code_harness.cli:app"
+edge-harness = "code_harness.launcher:run"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.12", "mypy>=1.16"]

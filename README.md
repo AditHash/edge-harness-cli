@@ -44,6 +44,20 @@ Platform prerequisites:
 - **macOS**: chat, read tools, Git, edits and remote MCP work. Command execution and local MCP stay
   **disabled** (no verified containment); `harness doctor` says so.
 
+## Quick start: `edge-harness`
+
+```powershell
+uv tool install --editable .            # puts edge-harness on PATH (~/.local/bin)
+edge-harness --region ap-south-1 --model <model-id>   # first run: saved for next time
+cd C:\path	onyepo; edge-harness              # chat in the current folder
+edge-harness --tui | --resume ID | --show-config | --profile NAME | --no-login
+```
+
+Region, model and profile are saved in `~/.edge-harness/settings.json` (never credentials;
+environment variables win). Before chat starts, credentials are checked with STS
+`GetCallerIdentity` (no inference). If they are missing or expired and you are at a terminal,
+`aws login` runs automatically; otherwise it tells you to run it and stops.
+
 ## Configure and run
 
 ```powershell

@@ -4,6 +4,7 @@
 
 | Command | Purpose |
 | --- | --- |
+| `edge-harness` | Chat in the current folder. `--region/--model/--profile` are saved and reused; `--tui`, `--resume ID`, `--show-config`, `--no-login`. Runs `aws login` when credentials are missing/expired (interactive only). |
 | `harness doctor` | Local checks only: Python, workspace, AWS settings present, sandbox backend, Git. No AWS call. |
 | `harness ask PROMPT` | One streamed turn. Options: `--workspace PATH`, `--project-instructions`, `--skill NAME` (repeatable), `--mcp-config FILE`. |
 | `harness chat` | Interactive Rich session. Same options plus `--resume SESSION_ID`. |
