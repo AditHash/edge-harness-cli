@@ -44,7 +44,9 @@ equivalent boundary. Non-interactive input cannot approve edits.
 Interactive chat stores completed conversations in
 `~/.edge-harness/sessions.sqlite` by default. Use `/sessions` to list sessions
 for the current workspace, `/resume ID` to continue one, and `/new` or `/clear`
-to start another. `harness chat --resume ID` also resumes a session. Set
+to start another. `/compact` removes older messages without generating a
+summary; automatic context management also uses a bounded message window.
+`harness chat --resume ID` also resumes a session. Set
 `HARNESS_STATE_DIR` to change the storage directory. The database contains
 conversation and tool context in plaintext and inherits your user profile's OS
 access controls. An interrupted or failed turn is not saved as a completed turn;

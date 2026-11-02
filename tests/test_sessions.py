@@ -83,6 +83,53 @@ def test_strands_session_restores_conversation_across_agents(tmp_path: Path) -> 
     assert "continue" in str(requests[1])
 
 
+def test_compacted_history_is_saved_and_restored(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    sessions = Sessions(tmp_path / "state" / "sessions.sqlite", workspace)
+    session_id = sessions.create()
+
+    async def model_stream(messages, *args, **kwargs):
+        yield {"messageStart": {"role": "assistant"}}
+        yield {"contentBlockDelta": {"delta": {"text": "response"}}}
+        yield {"contentBlockStop": {}}
+        yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    def new_model():
+        model = MagicMock(spec=Model)
+        model.stateful = False
+        model.get_config.return_value = {}
+        model.stream.side_effect = model_stream
+        return model
+
+    manager = sessions.manager(session_id)
+    agent = create_agent(Settings(workspace=workspace), model=new_model(), session_manager=manager)
+
+    async def send(text):
+        return [event async for event in stream_turn(agent, text)]
+
+    for text in ("first", "second", "third"):
+        asyncio.run(send(text))
+    before = len(agent.messages)
+    agent.conversation_manager.reduce_context(agent)
+    assert 0 < len(agent.messages) < before
+    asyncio.run(manager.save_snapshot(agent, is_latest=True))
+    restored = create_agent(
+        Settings(workspace=workspace),
+        model=new_model(),
+        session_manager=sessions.manager(session_id),
+    )
+    assert len(restored.messages) == len(agent.messages)
+    assert "third" in str(restored.messages)
+    assert "first" not in str(restored.messages)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="secure edits currently require Windows")
 def test_failed_turn_does_not_resume_or_replay_approved_edit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

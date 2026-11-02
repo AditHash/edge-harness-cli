@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -55,7 +56,7 @@ async def _show_turn(agent: object, prompt: str) -> None:
     console.print()
 
 
-def _make_agent(workspace: Path, session_manager=None) -> object:
+def _make_agent(workspace: Path, session_manager=None) -> Any:
     from code_harness.agent import create_agent
 
     def review(proposal: Proposal) -> bool:
@@ -105,7 +106,8 @@ def chat(workspace: Path | None = None, resume: str | None = None) -> None:
         settings = Settings(workspace=workspace)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = resume or sessions.create()
-        agent = _make_agent(workspace, sessions.manager(session_id))
+        manager = sessions.manager(session_id)
+        agent = _make_agent(workspace, manager)
         console.print(f"Session: {session_id}. Conversations are stored locally.")
         console.print(
             "File changes and sandbox commands require approval. Type /help for commands."
@@ -118,10 +120,13 @@ def chat(workspace: Path | None = None, resume: str | None = None) -> None:
             if prompt in {"/exit", "/quit"}:
                 break
             if prompt == "/help":
-                console.print("/help  /new  /clear  /sessions  /resume ID  /model  /status  /exit")
+                console.print(
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model  /status  /exit"
+                )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
-                agent = _make_agent(workspace, sessions.manager(session_id))
+                manager = sessions.manager(session_id)
+                agent = _make_agent(workspace, manager)
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
                 console.print("\n".join(sessions.list()) or "No sessions for this workspace.")
@@ -130,14 +135,25 @@ def chat(workspace: Path | None = None, resume: str | None = None) -> None:
             elif prompt.startswith("/resume "):
                 candidate = prompt.removeprefix("/resume ").strip()
                 try:
-                    manager = sessions.manager(candidate)
-                    replacement = _make_agent(workspace, manager)
+                    candidate_manager = sessions.manager(candidate)
+                    replacement = _make_agent(workspace, candidate_manager)
                 except Exception as exc:  # noqa: BLE001 - do not expose persisted content
                     console.print(f"[red]Cannot resume session ({type(exc).__name__}).[/red]")
                 else:
                     agent = replacement
+                    manager = candidate_manager
                     session_id = candidate
                     console.print(f"Resumed session {session_id}.")
+            elif prompt == "/compact":
+                try:
+                    before = len(agent.messages)
+                    agent.conversation_manager.reduce_context(agent)
+                    removed = before - len(agent.messages)
+                    if removed:
+                        asyncio.run(manager.save_snapshot(agent, is_latest=True))
+                    console.print(f"Removed {removed} older messages; no summary was generated.")
+                except Exception as exc:  # noqa: BLE001 - do not expose persisted content
+                    console.print(f"[red]Could not compact session ({type(exc).__name__}).[/red]")
             elif prompt == "/model":
                 console.print(f"Model: {settings.bedrock_model_id or 'not configured'}")
             elif prompt == "/status":

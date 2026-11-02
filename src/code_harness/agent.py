@@ -8,6 +8,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableLambda
 from strands import tool
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.models import BedrockModel, Model
 from strands.session.session_manager import SessionManager
 from strands.types.tools import ToolContext
@@ -134,6 +135,7 @@ def create_agent(
         background_tasks=False,
         caching=False,
         context_manager=False,
+        conversation_manager=SlidingWindowConversationManager(window_size=40, per_turn=True),
         callback_handler=None,
         agent_id="coding-agent",
     )

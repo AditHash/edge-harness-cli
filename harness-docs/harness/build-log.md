@@ -92,3 +92,8 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Added a SQLite storage adapter for the installed Strands snapshot manager, bound session IDs to the canonical workspace, and implemented `/sessions`, `/resume ID`, `/new`, `/clear`, `/status`, and `chat --resume`.
 - Only completed turns are saved. An offline model failure immediately after an approved file edit did not replay that edit or restore a pending tool call when a new agent was created. Conversation restoration across a new agent instance and workspace isolation are covered by tests.
 - `uv run pytest -q tests/test_sessions.py`: 4 passed. The snapshot callback specialization depends on the locked Strands SDK version. The SQLite database is unencrypted and contains conversation and tool context; in-progress failed turns are intentionally not restored.
+
+## 2026-11-02 — Context window management
+
+- Enabled the installed Strands sliding-window conversation manager with a 40-message window and per-model-call checks. `/compact` explicitly removes older messages, reports how many were removed, and saves the reduced snapshot. It does not claim to summarize them.
+- `uv run pytest -q tests/test_sessions.py`: 5 passed, including restoring manually compacted context after constructing a new agent. Ruff and mypy passed after enabling the manager. Token-based summarization is not implemented.
