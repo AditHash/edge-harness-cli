@@ -112,11 +112,13 @@ def test_chat_approve_command_reports_and_clears(tmp_path: Path, monkeypatch) ->
 
     from code_harness import cli
 
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
     monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setattr(cli, "_make_agent", lambda *a, **k: object())
     cli.SESSION_APPROVALS.edits = True  # left over from an earlier chat
     result = CliRunner().invoke(
-        cli.app, ["chat", "--workspace", str(tmp_path)], input="/approve\n/approve ask\n/exit\n"
+        cli.app, ["chat", "--workspace", str(workspace)], input="/approve\n/approve ask\n/exit\n"
     )
     assert result.exit_code == 0, result.output
     assert "File changes: ask each time" in result.output  # reset when the chat started
