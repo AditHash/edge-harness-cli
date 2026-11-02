@@ -119,6 +119,12 @@ def _open_mcp(
         return []
     from code_harness.mcp_integration import connect_sandboxed_mcp, load_mcp_config
 
+    try:
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        raise WorkspaceError("Invalid MCP configuration file") from None
+    if isinstance(raw, dict) and "url" in raw:
+        return _open_remote_mcp(stack, config_path)
     config = load_mcp_config(config_path)
     details = json.dumps(
         {"name": config.name, "command": config.command}, ensure_ascii=True, indent=2
@@ -142,6 +148,26 @@ def _open_mcp(
     console.print(
         f"MCP server {config.name}: {len(tools)} tools; {omitted} snapshot files omitted."
     )
+    return tools
+
+
+def _open_remote_mcp(stack: contextlib.ExitStack, config_path: Path) -> list[Any]:
+    from code_harness.mcp_remote import connect_remote_mcp, load_remote_config, validate_remote_url
+
+    config = load_remote_config(config_path)
+    validate_remote_url(config.url)
+    details = json.dumps({"name": config.name, "url": config.url}, ensure_ascii=True, indent=2)
+    if not review_mcp(
+        "REMOTE server connection",
+        details,
+        interactive=sys.stdin.isatty(),
+        note="Approved tool arguments are sent to this remote host. No credentials are sent.",
+        display=lambda text: console.print(text, markup=False, highlight=False),
+        read_reply=input,
+    ):
+        raise WorkspaceError("Remote MCP connection was not approved")
+    tools, _ = stack.enter_context(connect_remote_mcp(config))
+    console.print(f"Remote MCP server {config.name}: {len(tools)} tools.")
     return tools
 
 

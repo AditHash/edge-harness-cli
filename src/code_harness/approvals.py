@@ -69,14 +69,13 @@ def review_mcp(
     interactive: bool,
     display: Callable[[str], None],
     read_reply: Callable[[str], str],
+    note: str = "Server runs in a copied workspace without network access.",
 ) -> bool:
     """Review a sandboxed MCP server launch or exact tool call."""
     if not interactive:
         return False
     try:
-        display(
-            f"MCP {action}:\n{details}\nServer runs in a copied workspace without network access."
-        )
+        display(f"MCP {action}:\n{details}\n{note}")
         return read_reply("Approve this MCP action? Type yes: ").strip().casefold() == "yes"
     except (EOFError, KeyboardInterrupt, OSError):
         return False
