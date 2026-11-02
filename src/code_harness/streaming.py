@@ -5,6 +5,23 @@ from typing import Any
 
 from code_harness.contracts import AgentEvent
 
+SUMMARY_KEYS = ("path", "command", "question", "query", "url")
+
+
+def tool_summary(name: str, arguments: Any) -> str:
+    """`name target` using the most telling argument; control characters removed, bounded."""
+    target = ""
+    if isinstance(arguments, dict):
+        for key in SUMMARY_KEYS:
+            value = arguments.get(key)
+            if isinstance(value, str) and value.strip():
+                target = value.strip()
+                break
+    target = "".join(ch if ch.isprintable() else " " for ch in target)
+    if len(target) > 80:
+        target = target[:77] + "..."
+    return f"{name} {target}".rstrip()
+
 
 def _model_id(agent: Any) -> str:
     """The model that served the latest call (the routed choice in auto mode)."""
@@ -43,6 +60,9 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
                 yield AgentEvent("tool_started", tool["name"])
         elif isinstance(event.get("message"), dict):
             for block in event["message"].get("content", []):
+                use = block.get("toolUse") if isinstance(block, dict) else None
+                if isinstance(use, dict) and isinstance(use.get("name"), str):
+                    yield AgentEvent("tool_call", tool_summary(use["name"], use.get("input")))
                 result = block.get("toolResult") if isinstance(block, dict) else None
                 if isinstance(result, dict):
                     result_id = result.get("toolUseId")

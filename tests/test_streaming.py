@@ -175,3 +175,36 @@ def test_call_usage_names_the_serving_model() -> None:
 
     call = asyncio.run(collect())[0]
     assert call.kind == "call_usage" and call.text == "in.anthropic.claude-haiku-4-5"
+
+
+def test_tool_call_events_name_their_target() -> None:
+    from code_harness.streaming import tool_summary
+
+    class ToolAgent:
+        async def stream_async(self, prompt, **kwargs):
+            yield {
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "toolUse": {
+                                "toolUseId": "1",
+                                "name": "read_code",
+                                "input": {"path": "README.md"},
+                            }
+                        },
+                        {"toolUse": {"toolUseId": "2", "name": "list_repo", "input": {}}},
+                    ],
+                }
+            }
+            yield {"result": SimpleNamespace(stop_reason="end_turn", invocation_context=None)}
+
+    async def collect():
+        return [e async for e in stream_turn(ToolAgent(), "hi")]
+
+    calls = [e.text for e in asyncio.run(collect()) if e.kind == "tool_call"]
+    assert calls == ["read_code README.md", "list_repo"]
+    assert tool_summary("run_sandboxed", {"command": "a\x1b[2Jb" + "x" * 100}).startswith(
+        "run_sandboxed a [2Jb"
+    )
+    assert len(tool_summary("t", {"path": "y" * 200})) == 82

@@ -14,6 +14,7 @@ class AgentEvent:
         "compacted",
         "reasoning",
         "call_usage",
+        "tool_call",
     ]
     text: str = ""
     input_tokens: int = 0
