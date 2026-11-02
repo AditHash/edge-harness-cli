@@ -52,3 +52,50 @@ def test_real_agent_streams_fake_model_without_cloud(tmp_path: Path) -> None:
     events = asyncio.run(collect())
     assert "".join(event.text for event in events) == "Hello from fixture"
     assert events[-1].kind == "turn_completed"
+
+
+def test_strands_invokes_langchain_search_without_exposing_env(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("def useful_function():\n    pass\n")
+    (tmp_path / ".env").write_text("useful_function SECRET")
+    observed = []
+
+    async def model_stream(messages, *args, **kwargs):
+        observed.append(messages.copy())
+        yield {"messageStart": {"role": "assistant"}}
+        if len(observed) == 1:
+            yield {
+                "contentBlockStart": {
+                    "start": {"toolUse": {"toolUseId": "call1", "name": "search_code"}}
+                }
+            }
+            yield {
+                "contentBlockDelta": {
+                    "delta": {"toolUse": {"input": '{"query":"useful_function"}'}}
+                }
+            }
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Found app.py"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+    agent = create_agent(Settings(workspace=tmp_path), model=model)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "find the function")]
+
+    asyncio.run(run())
+    assert len(observed) == 2
+    assert "app.py:1" in str(observed[-1])
+    assert "SECRET" not in str(observed[-1])
