@@ -76,3 +76,44 @@ def test_turn_display_is_compact_and_readable(monkeypatch) -> None:
     assert "Summary" in text and "## Summary" not in text and "**one**" not in text  # Markdown
     assert "turn: 2,000 in / 150 out" in text
     assert tracker.input_tokens == 2000
+
+
+def test_approved_changes_are_recorded_and_summarized(tmp_path, monkeypatch) -> None:
+    import asyncio
+
+    from code_harness import agent as agent_module
+    from code_harness import cli
+    from code_harness.approvals import SessionApprovals
+    from code_harness.contracts import AgentEvent
+    from code_harness.proposals import propose
+    from code_harness.workspace import Workspace
+
+    recorder = Console(width=100, record=True, color_system=None)
+    monkeypatch.setattr(cli, "console", recorder)
+    monkeypatch.setattr(cli, "SESSION_CHANGES", [])
+    monkeypatch.setattr(cli, "SESSION_APPROVALS", SessionApprovals(edits=True))
+    captured = {}
+    monkeypatch.setattr(
+        agent_module, "create_agent", lambda settings, **kwargs: captured.update(kwargs) or object()
+    )
+    io = cli.ReviewIO(True, lambda text: None, lambda prompt: "no")
+    cli._make_agent(tmp_path, model_id="m", review_io=io)
+    (tmp_path / "a.md").write_bytes(b"one\ntwo\n")
+    edit = propose(Workspace(tmp_path), "a.md", "one\nTWO\nthree\n")
+    created = propose(Workspace(tmp_path), "new.md", "x\n")
+
+    async def fake(agent, prompt):
+        assert captured["review"](edit)
+        assert captured["review"](created)
+        yield AgentEvent("turn_completed")
+
+    monkeypatch.setattr(cli, "stream_turn", fake)
+    asyncio.run(cli._show_turn(object(), "x"))
+    text = recorder.export_text()
+    assert "Changed this turn" in text
+    assert "a.md" in text and "edited" in text and "new.md" in text and "created" in text
+    assert cli.SESSION_CHANGES == [("a.md", 2, 1, "edited"), ("new.md", 1, 0, "created")]
+
+    cli.SESSION_APPROVALS.reset()
+    assert not captured["review"](edit)  # rejected: not recorded
+    assert len(cli.SESSION_CHANGES) == 2

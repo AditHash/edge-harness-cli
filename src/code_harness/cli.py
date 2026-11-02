@@ -25,6 +25,7 @@ from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
+from code_harness.ui import changes_table
 from code_harness.usage import UsageTracker
 from code_harness.workspace import Workspace, WorkspaceError
 
@@ -32,6 +33,8 @@ app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
 # Standing approvals granted with `all`; reset when a chat starts.
 SESSION_APPROVALS = SessionApprovals()
+# (path, added, removed, kind) for every file change approved in this chat.
+SESSION_CHANGES: list[tuple[str, int, int, str]] = []
 
 
 def _model_report(agent: Any, configured: str | None) -> str:
@@ -193,6 +196,7 @@ class _ReplyView:
 async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = None) -> None:
     meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
     reply = _ReplyView()
+    changes_before = len(SESSION_CHANGES)
     try:
         async for event in stream_turn(agent, prompt):
             if event.kind == "reasoning":
@@ -229,6 +233,8 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
     finally:
         reply.stop()
         meter.stop()
+    if len(SESSION_CHANGES) > changes_before:
+        console.print(changes_table(SESSION_CHANGES[changes_before:], "Changed this turn"))
 
 
 @dataclass(frozen=True)
@@ -269,13 +275,26 @@ def _make_agent(
 
     def review(proposal: Proposal) -> bool:
         ui = io()
-        return review_proposal(
+        approved = review_proposal(
             proposal,
             interactive=ui.interactive,
             display=ui.display,
             read_reply=ui.read_reply,
             session=SESSION_APPROVALS,
         )
+        if approved:
+            from code_harness.ui import diff_stats
+
+            added, removed = diff_stats(proposal.diff)
+            kind = (
+                "deleted"
+                if proposal.new_content is None
+                else "created"
+                if proposal.original_digest is None
+                else "edited"
+            )
+            SESSION_CHANGES.append((proposal.path, added, removed, kind))
+        return approved
 
     def command_review(command: str) -> bool:
         ui = io()
@@ -426,6 +445,7 @@ def chat(
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
         SESSION_APPROVALS.reset()
+        SESSION_CHANGES.clear()
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
@@ -446,7 +466,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /approve [ask]  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /approve [ask]  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -509,6 +529,11 @@ def chat(
 
                 saved = agent.state.get("plan") if hasattr(agent, "state") else None
                 console.print(render_plan(saved) if saved else "No plan recorded.", markup=False)
+            elif prompt == "/changes":
+                if SESSION_CHANGES:
+                    console.print(changes_table(SESSION_CHANGES, "Changed this session"))
+                else:
+                    console.print("No approved file changes in this session.")
             elif prompt == "/approve":
                 console.print(SESSION_APPROVALS.describe(), markup=False)
             elif prompt == "/approve ask":

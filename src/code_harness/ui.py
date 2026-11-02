@@ -7,6 +7,7 @@ inject styles or fake prompts.
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 
 DIFF_PREFIX = "Proposed change: "
@@ -52,3 +53,16 @@ def review_renderable(text: str) -> RenderableType:
     if text.startswith("MCP "):
         return Panel(Text(text), title="MCP", border_style="magenta", expand=True)
     return Text(text, style="dim" if text.startswith(("Applied under", "Run under")) else "")
+
+
+def changes_table(changes: list[tuple[str, int, int, str]], title: str) -> Table:
+    """Approved file changes with line counts; paths are shown literally."""
+
+    table = Table(title=title, title_style="bold", show_edge=False, pad_edge=False)
+    table.add_column("file")
+    table.add_column("change")
+    table.add_column("+", justify="right", style="green")
+    table.add_column("-", justify="right", style="red")
+    for path, added, removed, kind in changes:
+        table.add_row(Text(path), kind, str(added), str(removed))
+    return table
