@@ -112,3 +112,54 @@ def test_valid_credentials_start_chat_in_current_folder(
 def test_aws_login_reports_missing_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(launcher.shutil, "which", lambda name: None)
     assert launcher.aws_login(None, None) is False
+
+
+def test_auto_model_resolves_and_forces_mumbai_region(
+    monkeypatch: pytest.MonkeyPatch, isolated: Path
+) -> None:
+    from code_harness import catalog, cli
+
+    launcher.save({"region": "us-east-1", "model": "auto", "residency": "india"})
+    chosen = catalog.CatalogModel(
+        "in.anthropic.claude-sonnet-5", "india", "anthropic", 1_000_000, "sdk", "ok"
+    )
+    seen: dict = {}
+
+    def fake_resolve(state, tiers, notify):
+        seen["tiers"] = tuple(tiers)
+        return chosen
+
+    monkeypatch.setattr(catalog, "resolve_auto", fake_resolve)
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
+    monkeypatch.setattr(
+        cli,
+        "chat",
+        lambda **k: seen.update(
+            model=__import__("os").environ["BEDROCK_MODEL_ID"],
+            region=__import__("os").environ["AWS_REGION"],
+        ),
+    )
+    result = CliRunner().invoke(launcher.launcher, [])
+    assert result.exit_code == 0, result.output
+    assert seen == {
+        "tiers": ("india",),
+        "model": "in.anthropic.claude-sonnet-5",
+        "region": "ap-south-1",
+    }
+    assert "Auto model: in.anthropic.claude-sonnet-5" in result.output
+
+
+def test_auto_without_capable_model_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+    from code_harness import catalog, cli
+
+    launcher.save({"model": "auto"})
+    monkeypatch.setattr(catalog, "resolve_auto", lambda *a, **k: None)
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
+    monkeypatch.setattr(cli, "chat", lambda **k: pytest.fail("chat started"))
+    result = CliRunner().invoke(launcher.launcher, [])
+    assert result.exit_code == 1 and "no tool-capable model" in result.output
+
+
+def test_invalid_residency_refused() -> None:
+    result = CliRunner().invoke(launcher.launcher, ["--residency", "usa", "--show-config"])
+    assert result.exit_code != 0

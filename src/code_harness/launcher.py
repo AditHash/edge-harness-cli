@@ -25,7 +25,9 @@ FIELDS = {
     "region": ("AWS_REGION", re.compile(r"[a-z]{2}(-[a-z]+)+-\d{1,2}")),
     "model": ("BEDROCK_MODEL_ID", re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}")),
     "profile": ("AWS_PROFILE", re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")),
+    "residency": ("HARNESS_RESIDENCY", re.compile(r"india|mumbai|any")),
 }
+RESIDENCY_TIERS = {"india": ("india",), "mumbai": ("mumbai",), "any": ("india", "mumbai")}
 
 
 def state_dir() -> Path:
@@ -132,6 +134,82 @@ def ensure_credentials(
 launcher = typer.Typer(add_completion=False)
 
 
+def print_catalog(models: list, residency: str) -> None:
+    from rich.table import Table
+
+    from code_harness.catalog import TIER_LABELS
+
+    allowed = RESIDENCY_TIERS[residency]
+    table = Table(title=f"Bedrock models (residency: {residency})")
+    for column in ("model id", "tier", "context", "source", "tools"):
+        table.add_column(column)
+    for item in models:
+        if item.tier not in allowed:
+            continue
+        context = f"{item.context:,}" if item.context else "?"
+        table.add_row(item.model_id, item.tier, context, item.context_source, item.tools)
+    console.print(table)
+    for tier in allowed:
+        console.print(f"{tier}: {TIER_LABELS[tier]}", markup=False)
+    console.print(
+        "context source: sdk = Strands model table; estimate = provider-published, Bedrock may "
+        "serve less. tools: ok/failed from a recorded probe; untested = not checked yet.",
+        markup=False,
+    )
+
+
+def catalog_command(residency: str, probes: int) -> None:
+    from code_harness import catalog
+
+    models, _ = catalog.load_catalog(state_dir(), refresh=True)
+    allowed = RESIDENCY_TIERS[residency]
+    if probes:
+        pending = [m for m in models if m.tools == "untested" and m.tier in allowed][:probes]
+        for item in pending:
+            console.print(f"Probing {item.model_id} ...", markup=False)
+            catalog.record_probe(state_dir(), item.model_id, catalog.probe_tool_use(item.model_id))
+        models, _ = catalog.load_catalog(state_dir())
+    print_catalog(models, residency)
+    chosen = catalog.choose_auto(models, allowed)
+    console.print(
+        f"auto would pick: {chosen.model_id if chosen else 'nothing yet (probe some models)'}",
+        markup=False,
+    )
+
+
+def resolve_model(effective: dict[str, str]) -> None:
+    """Turn `auto` into a concrete model id; catalog models are always called from Mumbai."""
+    from code_harness import catalog
+
+    tiers = RESIDENCY_TIERS[effective.get("residency", "any")]
+    if effective.get("model") == "auto":
+        chosen = catalog.resolve_auto(
+            state_dir(), tiers, notify=lambda text: console.print(text, markup=False)
+        )
+        if chosen is None:
+            console.print(
+                "Auto mode found no tool-capable model for this residency. "
+                "Run `edge-harness --probe-models 5` or choose `--model <id>`."
+            )
+            raise typer.Exit(1)
+        os.environ["BEDROCK_MODEL_ID"] = chosen.model_id
+        effective["model"] = chosen.model_id
+        context = f"{chosen.context:,}" if chosen.context else "unknown"
+        console.print(
+            f"Auto model: {chosen.model_id} ({chosen.tier}, context {context} "
+            f"[{chosen.context_source}])",
+            markup=False,
+        )
+    model_id = effective.get("model", "")
+    mumbai = catalog.load_cache(state_dir()).get("listing", {}).get("mumbai", [])
+    # in.* profiles and Mumbai on-demand models must be invoked from ap-south-1.
+    needs_mumbai = model_id.startswith("in.") or model_id in mumbai
+    if needs_mumbai and effective.get("region") != catalog.HOME_REGION:
+        os.environ["AWS_REGION"] = catalog.HOME_REGION
+        effective["region"] = catalog.HOME_REGION
+        console.print(f"Region set to {catalog.HOME_REGION} for {model_id}.", markup=False)
+
+
 @launcher.command()
 def main(
     region: Annotated[str | None, typer.Option(help="Save and use this AWS region")] = None,
@@ -141,11 +219,27 @@ def main(
     tui: Annotated[bool, typer.Option("--tui", help="Open the Textual interface")] = False,
     show_config: Annotated[bool, typer.Option("--show-config", help="Print settings")] = False,
     no_login: Annotated[bool, typer.Option("--no-login", help="Skip the credential check")] = False,
+    residency: Annotated[
+        str | None,
+        typer.Option(help="Save: india (in.* only), mumbai (ap-south-1 only) or any"),
+    ] = None,
+    list_models: Annotated[
+        bool, typer.Option("--list-models", help="List India/Mumbai models and exit")
+    ] = False,
+    probe_models: Annotated[
+        int,
+        typer.Option(help="Check tool support of N untested models (N small billed calls)"),
+    ] = 0,
 ) -> None:
     """Chat about the current folder. Region/model/profile options are remembered."""
     updates = {
         key: value
-        for key, value in (("region", region), ("model", model), ("profile", profile))
+        for key, value in (
+            ("region", region),
+            ("model", model),
+            ("profile", profile),
+            ("residency", residency),
+        )
         if value
     }
     if updates:
@@ -156,6 +250,15 @@ def main(
         for key in FIELDS:
             console.print(f"{key}: {effective.get(key, 'not set')}", markup=False)
         return
+    if list_models or probe_models:
+        if not no_login and not ensure_credentials(
+            effective.get("profile"), "ap-south-1", interactive=sys.stdin.isatty()
+        ):
+            raise typer.Exit(1)
+        catalog_command(effective.get("residency", "any"), probe_models)
+        return
+    if effective.get("model") == "auto":
+        effective.setdefault("region", "ap-south-1")
     missing = [key for key in ("region", "model") if key not in effective]
     if missing:
         console.print(
@@ -168,6 +271,7 @@ def main(
         effective.get("profile"), effective.get("region"), interactive=sys.stdin.isatty()
     ):
         raise typer.Exit(1)
+    resolve_model(effective)
     from code_harness import cli
 
     if tui:

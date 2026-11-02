@@ -26,6 +26,25 @@ app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
 
 
+def _context_report(agent: Any, settings: Settings) -> str:
+    """Current context use against the model's window and the auto-compact threshold."""
+    model = getattr(agent, "model", None)
+    limit = getattr(model, "context_window_limit", None)
+    metrics = getattr(agent, "event_loop_metrics", None)
+    used = getattr(metrics, "latest_context_size", None)
+    threshold = settings.harness_compact_threshold
+    if not isinstance(limit, int) or not limit:
+        return "Context window unknown for this model; auto-compact uses the SDK default."
+    if not isinstance(used, int):
+        return (
+            f"Context window {limit:,} tokens; no model call yet. Auto-compact at {threshold:.0%}."
+        )
+    return (
+        f"Context: {used:,} / {limit:,} tokens ({used / limit:.1%}). "
+        f"Auto-compact at {threshold:.0%} ({int(limit * threshold):,} tokens)."
+    )
+
+
 def _failure_message(exc: BaseException) -> str:
     """Actionable text without provider error contents."""
     name = type(exc).__name__
@@ -95,6 +114,8 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
             if tracker is not None:
                 tracker.add(event.input_tokens, event.output_tokens)
             console.print(f"\n[dim]{event.text}[/dim]")
+        elif event.kind == "compacted":
+            console.print(f"\n[cyan]{event.text}[/cyan]")
         elif event.kind == "error":
             console.print(f"\n[yellow]{event.text}[/yellow]")
     console.print()
@@ -299,7 +320,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /plan  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -364,6 +385,8 @@ def chat(
                 console.print(render_plan(saved) if saved else "No plan recorded.", markup=False)
             elif prompt == "/usage":
                 console.print(tracker.summary(), markup=False)
+            elif prompt == "/context":
+                console.print(_context_report(agent, settings), markup=False)
             elif prompt == "/status":
                 console.print(f"Workspace: {workspace.resolve()}; session: {session_id}")
             elif prompt.startswith("/"):

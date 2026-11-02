@@ -8,6 +8,8 @@ from code_harness.contracts import AgentEvent
 
 async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
+    manager = getattr(agent, "conversation_manager", None)
+    removed_before = getattr(manager, "removed_message_count", 0)
     async for event in agent.stream_async(prompt, limits={"turns": 20, "output_tokens": 32768}):
         if isinstance(event.get("data"), str):
             yield AgentEvent("text_delta", event["data"])
@@ -38,6 +40,17 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
                     f"output tokens: {usage.get('outputTokens', 0)}",
                     int(usage.get("inputTokens", 0) or 0),
                     int(usage.get("outputTokens", 0) or 0),
+                )
+            removed_after = getattr(manager, "removed_message_count", 0)
+            if (
+                isinstance(removed_after, int)
+                and isinstance(removed_before, int)
+                and removed_after > removed_before
+            ):
+                yield AgentEvent(
+                    "compacted",
+                    f"Context auto-compacted: {removed_after - removed_before} older "
+                    "messages summarized.",
                 )
             reason = getattr(result, "stop_reason", "end_turn")
             if reason in {"end_turn", "stop_sequence"}:

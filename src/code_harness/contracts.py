@@ -4,7 +4,9 @@ from typing import Literal, Protocol
 
 @dataclass(frozen=True)
 class AgentEvent:
-    kind: Literal["text_delta", "tool_started", "tool_result", "error", "turn_completed", "usage"]
+    kind: Literal[
+        "text_delta", "tool_started", "tool_result", "error", "turn_completed", "usage", "compacted"
+    ]
     text: str = ""
     input_tokens: int = 0
     output_tokens: int = 0

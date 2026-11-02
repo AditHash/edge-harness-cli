@@ -44,10 +44,18 @@ def create_agent(
     if model is None:
         if not settings.bedrock_model_id or not settings.aws_region:
             raise ValueError("Set BEDROCK_MODEL_ID and AWS_REGION before starting an agent")
+        from code_harness.catalog import context_for
+
+        extra: dict[str, Any] = {}
+        context, source = context_for(settings.bedrock_model_id)
+        if source == "estimate" and context:
+            # The SDK does not know this model; size auto-compaction from the published limit.
+            extra["context_window_limit"] = context
         model = BedrockModel(
             model_id=settings.bedrock_model_id,
             region_name=settings.aws_region,
             max_tokens=settings.bedrock_max_tokens,
+            **extra,
         )
     workspace = Workspace(settings.workspace)
     search_pipeline = RunnableLambda(workspace.search)
@@ -308,7 +316,10 @@ def create_agent(
         caching=False,
         context_manager=False,
         conversation_manager=SummarizingConversationManager(
-            summary_ratio=0.3, preserve_recent_messages=10, proactive_compression=True
+            summary_ratio=0.3,
+            preserve_recent_messages=10,
+            # Auto-compact before each model call once input passes this share of the window.
+            proactive_compression={"compression_threshold": settings.harness_compact_threshold},
         ),
         callback_handler=None,
         agent_id="coding-agent",
