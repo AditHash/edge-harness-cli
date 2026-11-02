@@ -67,11 +67,12 @@
 
 ## Implementation status (2026-11-02, evidence in `harness/build-log.md`)
 
-Done and tested offline (WSL tests opt-in via `HARNESS_TEST_WSL=1`): Phases 0-4; Phase 5 durable
-sessions, `/compact` and proactive token-threshold compaction (Strands summarizing manager), sandboxed opt-in stdio MCP with per-call
-approval, read-only Git status/diff, opt-in explorer specialist, project guidance/skills.
-Scenario C (fail -> approved fix -> rerun) is covered by `tests/test_scenarios.py`.
+Implemented and tested offline: Phases 0-5 including sandboxed local and remote MCP with per-call
+approval, read-only Git tools, summarizing/proactive compaction, planning, opt-in explorer, reviewer
+and test-runner specialists, cumulative usage, Textual UI, ranked LangChain retrieval (benchmarked),
+POSIX reviewed edits, native Linux sandbox backend, repository-analysis and debugging scenario tests.
 
-Not done: live Bedrock verification (no authorization), token-aware summarizing compaction,
-remote MCP, Textual UI, LangChain retrieval benchmark, LangGraph/Deep Agents workflows (no
-benefit demonstrated), non-Windows edits and sandbox, safe edits on Linux/macOS, sanitized tracing.
+Not done / unverified: live Bedrock streaming and real summarization quality (Scenario G, needs
+authorization); macOS command sandbox (disabled by design); native Linux and POSIX edits verified
+only through WSL's Linux Python, not a separate Linux machine; semantic embeddings; sanitized
+tracing; LangGraph and Deep Agents (rejected for lack of measured benefit).
