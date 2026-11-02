@@ -178,7 +178,7 @@ def catalog_command(residency: str, probes: int) -> None:
 
 
 def resolve_model(effective: dict[str, str]) -> None:
-    """Turn `auto` into a concrete model id; catalog models are always called from Mumbai."""
+    """Prepare `auto` routing (probing if needed); catalog models are called from Mumbai."""
     from code_harness import catalog
 
     tiers = RESIDENCY_TIERS[effective.get("residency", "any")]
@@ -186,20 +186,21 @@ def resolve_model(effective: dict[str, str]) -> None:
         chosen = catalog.resolve_auto(
             state_dir(), tiers, notify=lambda text: console.print(text, markup=False)
         )
-        if chosen is None:
+        route = catalog.routing_candidates(state_dir(), tiers)
+        if chosen is None or not route:
             console.print(
                 "Auto mode found no tool-capable model for this residency. "
                 "Run `edge-harness --probe-models 5` or choose `--model <id>`."
             )
             raise typer.Exit(1)
-        os.environ["BEDROCK_MODEL_ID"] = chosen.model_id
-        effective["model"] = chosen.model_id
-        context = f"{chosen.context:,}" if chosen.context else "unknown"
-        console.print(
-            f"Auto model: {chosen.model_id} ({chosen.tier}, context {context} "
-            f"[{chosen.context_source}])",
-            markup=False,
+        os.environ["HARNESS_RESIDENCY"] = effective.get("residency", "any")
+        os.environ["AWS_REGION"] = catalog.HOME_REGION
+        effective["region"] = catalog.HOME_REGION
+        order = ", ".join(
+            f"{m.model_id} ({m.context:,})" if m.context else m.model_id for m in route
         )
+        console.print(f"Auto routing (per request, with failover): {order}", markup=False)
+        return
     model_id = effective.get("model", "")
     mumbai = catalog.load_cache(state_dir()).get("listing", {}).get("mumbai", [])
     # in.* profiles and Mumbai on-demand models must be invoked from ap-south-1.

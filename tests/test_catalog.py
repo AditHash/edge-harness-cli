@@ -122,9 +122,14 @@ def test_probe_detects_tool_call_and_fails_closed() -> None:
 
     tool_reply = {"output": {"message": {"content": [{"toolUse": {"name": "get_word"}}]}}}
     text_reply = {"output": {"message": {"content": [{"text": "the word is x"}]}}}
-    assert catalog.probe_tool_use("m", client=Client(tool_reply))
-    assert not catalog.probe_tool_use("m", client=Client(text_reply))
-    assert not catalog.probe_tool_use("m", client=Client(error=RuntimeError("denied")))
+    assert catalog.probe_tool_use("m", client=Client(tool_reply)) == "ok"
+    assert catalog.probe_tool_use("m", client=Client(text_reply)) == "failed"
+    assert catalog.probe_tool_use("m", client=Client(error=RuntimeError("boom"))) == "failed"
+
+    class Denied(Exception):
+        response = {"Error": {"Code": "AccessDeniedException"}}  # noqa: RUF012
+
+    assert catalog.probe_tool_use("m", client=Client(error=Denied())) == "no_access"
 
 
 def test_discover_pages_and_filters() -> None:

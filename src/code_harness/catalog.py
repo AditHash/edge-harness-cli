@@ -68,7 +68,7 @@ class CatalogModel:
     provider: str
     context: int | None
     context_source: str  # "sdk", "estimate" or "unknown"
-    tools: str  # "ok", "failed" or "untested"
+    tools: str  # "ok", "failed" (no tool call), "no_access" or "untested"
 
 
 def _provider(model_id: str) -> str:
@@ -143,7 +143,7 @@ def build(listing: dict, probes: dict[str, str]) -> list[CatalogModel]:
                     probes.get(model_id, "untested"),
                 )
             )
-    tool_rank = {"ok": 0, "untested": 1, "failed": 2}
+    tool_rank = {"ok": 0, "untested": 1, "failed": 2, "no_access": 3}
     models.sort(
         key=lambda m: (TIERS.index(m.tier), tool_rank[m.tools], -(m.context or 0), m.model_id)
     )
@@ -181,7 +181,7 @@ def load_cache(state_dir: Path) -> dict:
         {
             k: v
             for k, v in probes.items()
-            if isinstance(k, str) and valid.fullmatch(k) and v in {"ok", "failed"}
+            if isinstance(k, str) and valid.fullmatch(k) and v in {"ok", "failed", "no_access"}
         }
         if isinstance(probes, dict)
         else {}
@@ -212,8 +212,8 @@ def save_cache(state_dir: Path, data: dict) -> None:
 # ---- tool-use probe (one small billed call per model) --------------------------------------
 
 
-def probe_tool_use(model_id: str, region: str = HOME_REGION, client: Any = None) -> bool:
-    """True when the model answers a trivial request with a well-formed tool call."""
+def probe_tool_use(model_id: str, region: str = HOME_REGION, client: Any = None) -> str:
+    """'ok' if the model answers with a well-formed tool call; 'no_access' or 'failed' otherwise."""
     if client is None:
         import boto3
 
@@ -232,10 +232,13 @@ def probe_tool_use(model_id: str, region: str = HOME_REGION, client: Any = None)
             toolConfig={"tools": [tool]},
             inferenceConfig={"maxTokens": 300},
         )
-    except Exception:  # noqa: BLE001 - access denied, unsupported tools, throttling: all "failed"
-        return False
+    except Exception as exc:  # noqa: BLE001 - classify, never surface provider text
+        from code_harness.routing import classify
+
+        return "no_access" if classify(exc) == "drop" else "failed"
     blocks = response.get("output", {}).get("message", {}).get("content", [])
-    return any(block.get("toolUse", {}).get("name") == "get_word" for block in blocks)
+    called = any(block.get("toolUse", {}).get("name") == "get_word" for block in blocks)
+    return "ok" if called else "failed"
 
 
 def as_rows(models: Iterable[CatalogModel]) -> list[dict]:
@@ -263,9 +266,13 @@ def load_catalog(
     return build(listing, cache.get("probes", {})), cache
 
 
-def record_probe(state_dir: Path, model_id: str, ok: bool) -> None:
+def record_probe(state_dir: Path, model_id: str, status: str | bool) -> None:
     cache = load_cache(state_dir)
-    cache.setdefault("probes", {})[model_id] = "ok" if ok else "failed"
+    if isinstance(status, bool):
+        status = "ok" if status else "failed"
+    if status not in {"ok", "failed", "no_access"}:
+        raise ValueError(f"unknown probe status {status!r}")
+    cache.setdefault("probes", {})[model_id] = status
     save_cache(state_dir, cache)
 
 
@@ -274,7 +281,7 @@ def resolve_auto(
     tiers: Iterable[str] = TIERS,
     *,
     notify: Callable[[str], None] = print,
-    probe_fn: Callable[[str], bool] = probe_tool_use,
+    probe_fn: Callable[[str], str | bool] = probe_tool_use,
     discover_fn: Callable[[], dict] = discover,
 ) -> CatalogModel | None:
     """Pick the best model; probe untested candidates (one small billed call each) if needed."""
@@ -293,10 +300,24 @@ def resolve_auto(
         ) >= (allowed.index(best.tier), -(best.context or 0)):
             break
         notify(f"Checking tool support of {candidate.model_id} (one small model call)...")
-        ok = probe_fn(candidate.model_id)
-        record_probe(state_dir, candidate.model_id, ok)
-        if ok:
+        status = probe_fn(candidate.model_id)
+        record_probe(state_dir, candidate.model_id, status)
+        if status in {True, "ok"}:
             models, _ = load_catalog(state_dir, discover_fn=discover_fn)
             best = choose_auto(models, allowed)
             break
     return best
+
+
+MAX_ROUTE_CANDIDATES = 4
+
+
+def routing_candidates(state_dir: Path, tiers: Iterable[str] = TIERS) -> list[CatalogModel]:
+    """Probed tool-capable models in the allowed tiers, best first, for the auto router."""
+    allowed = list(tiers)
+    models = build(
+        load_cache(state_dir).get("listing", {}), load_cache(state_dir).get("probes", {})
+    )
+    pool = [m for m in models if m.tools == "ok" and m.tier in allowed]
+    pool.sort(key=lambda m: (allowed.index(m.tier), -(m.context or 0), m.model_id))
+    return pool[:MAX_ROUTE_CANDIDATES]

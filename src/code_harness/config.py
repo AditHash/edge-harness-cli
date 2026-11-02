@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     bedrock_model_id: str | None = None
     bedrock_max_tokens: int = Field(default=16384, ge=256, le=65536)
     harness_compact_threshold: float = Field(default=0.7, gt=0.1, le=0.95)
+    harness_residency: str = Field(default="any", pattern=r"^(india|mumbai|any)$")
     sandbox_wsl_distribution: str = "Ubuntu"
     harness_state_dir: Path = Field(default_factory=lambda: Path.home() / ".edge-harness")
     harness_enable_explorer: bool = False

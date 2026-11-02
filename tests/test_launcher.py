@@ -10,8 +10,11 @@ from code_harness import launcher
 @pytest.fixture(autouse=True)
 def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
-    for variable in ("AWS_REGION", "BEDROCK_MODEL_ID", "AWS_PROFILE"):
-        monkeypatch.delenv(variable, raising=False)
+    for variable in ("AWS_REGION", "BEDROCK_MODEL_ID", "AWS_PROFILE", "HARNESS_RESIDENCY"):
+        # setenv first so teardown restores the original state even though the launcher
+        # writes os.environ directly.
+        monkeypatch.setenv(variable, "")
+        monkeypatch.delenv(variable)
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -114,14 +117,16 @@ def test_aws_login_reports_missing_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert launcher.aws_login(None, None) is False
 
 
-def test_auto_model_resolves_and_forces_mumbai_region(
+def test_auto_model_stays_routed_and_forces_mumbai_region(
     monkeypatch: pytest.MonkeyPatch, isolated: Path
 ) -> None:
+    import os
+
     from code_harness import catalog, cli
 
     launcher.save({"region": "us-east-1", "model": "auto", "residency": "india"})
     chosen = catalog.CatalogModel(
-        "in.anthropic.claude-sonnet-5", "india", "anthropic", 1_000_000, "sdk", "ok"
+        "in.anthropic.claude-haiku-4-5", "india", "anthropic", 200_000, "sdk", "ok"
     )
     seen: dict = {}
 
@@ -129,24 +134,26 @@ def test_auto_model_resolves_and_forces_mumbai_region(
         seen["tiers"] = tuple(tiers)
         return chosen
 
+    def fake_chat(**kwargs):
+        seen.update(
+            model=os.environ["BEDROCK_MODEL_ID"],
+            region=os.environ["AWS_REGION"],
+            residency=os.environ["HARNESS_RESIDENCY"],
+        )
+
     monkeypatch.setattr(catalog, "resolve_auto", fake_resolve)
+    monkeypatch.setattr(catalog, "routing_candidates", lambda state, tiers: [chosen])
     monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
-    monkeypatch.setattr(
-        cli,
-        "chat",
-        lambda **k: seen.update(
-            model=__import__("os").environ["BEDROCK_MODEL_ID"],
-            region=__import__("os").environ["AWS_REGION"],
-        ),
-    )
+    monkeypatch.setattr(cli, "chat", fake_chat)
     result = CliRunner().invoke(launcher.launcher, [])
     assert result.exit_code == 0, result.output
     assert seen == {
         "tiers": ("india",),
-        "model": "in.anthropic.claude-sonnet-5",
+        "model": "auto",
         "region": "ap-south-1",
+        "residency": "india",
     }
-    assert "Auto model: in.anthropic.claude-sonnet-5" in result.output
+    assert "Auto routing (per request, with failover)" in result.output
 
 
 def test_auto_without_capable_model_stops(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,6 +161,7 @@ def test_auto_without_capable_model_stops(monkeypatch: pytest.MonkeyPatch) -> No
 
     launcher.save({"model": "auto"})
     monkeypatch.setattr(catalog, "resolve_auto", lambda *a, **k: None)
+    monkeypatch.setattr(catalog, "routing_candidates", lambda *a, **k: [])
     monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
     monkeypatch.setattr(cli, "chat", lambda **k: pytest.fail("chat started"))
     result = CliRunner().invoke(launcher.launcher, [])

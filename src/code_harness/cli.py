@@ -184,6 +184,7 @@ def _make_agent(
         guidance=guidance,
         mcp_tools=mcp_tools,
         mcp_review=mcp_review if mcp_tools else None,
+        notify=lambda text: console.print(f"[cyan]{text}[/cyan]", highlight=False),
     )
 
 
