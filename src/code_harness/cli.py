@@ -89,7 +89,7 @@ def chat(workspace: Path | None = None) -> None:
     workspace = workspace or Path.cwd()
     try:
         agent = _make_agent(workspace)
-        console.print("Edits to existing files require approval. Type /help for commands.")
+        console.print("File changes require approval. Type /help for commands.")
         while True:
             try:
                 prompt = input("You > ").strip()

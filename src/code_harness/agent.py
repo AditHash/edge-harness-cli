@@ -67,7 +67,7 @@ def create_agent(
 
         @tool
         def edit_code(path: str, new_content: str) -> str:
-            """Propose replacing an existing UTF-8 file; the user must review and approve the diff."""
+            """Propose creating or replacing a UTF-8 file; the user must approve its diff."""
             try:
                 proposal = propose(workspace, path, new_content)
                 return apply_reviewed_edit(workspace, proposal, review)
@@ -77,9 +77,9 @@ def create_agent(
         tools.append(edit_code)
         instructions = instructions.replace(
             "You have read-only access; do not claim to have edited files or run commands.",
-            "You may propose changes to existing files with edit_code; every change needs user approval. "
-            "Never claim to have edited a file unless the tool reports it was applied. "
-            "You cannot run commands, create files, or delete files.",
+            "You may propose file creation or changes with edit_code; every change needs user approval. "
+            "Never claim a file changed unless the tool reports success. "
+            "You cannot run commands or delete files.",
         )
 
     return create_harness(

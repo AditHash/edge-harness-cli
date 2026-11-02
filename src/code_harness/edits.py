@@ -81,7 +81,7 @@ def _locked_directories(directory: Path) -> Iterator[None]:
             close(handle)
 
 
-def _open_exclusive(path: Path) -> int:
+def _open_exclusive(path: Path, *, create_new: bool = False) -> int:
     import msvcrt
 
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
@@ -96,7 +96,8 @@ def _open_exclusive(path: Path) -> int:
         ctypes.c_void_p,
     ]
     create.restype = ctypes.c_void_p
-    handle = create(str(path), 0x80000000 | 0x40000000, 0, None, 3, 0x00200000, None)
+    access = 0x80000000 | 0x40000000 | (0x00010000 if create_new else 0)
+    handle = create(str(path), access, 0, None, 1 if create_new else 3, 0x00200000, None)
     if handle == ctypes.c_void_p(-1).value:
         raise WorkspaceError("Cannot obtain exclusive access to the target file")
     try:
@@ -115,7 +116,7 @@ def _write_all(stream, content: bytes) -> None:
         view = view[written:]
 
 
-def _journal(root: Path, relative: str, original: bytes) -> Path:
+def _journal(root: Path, relative: str, original: bytes | None) -> Path:
     directory = Path.home() / ".edge-harness" / "recovery"
     directory.mkdir(parents=True, mode=0o700, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix="edit-", suffix=".json", dir=directory)
@@ -125,7 +126,9 @@ def _journal(root: Path, relative: str, original: bytes) -> Path:
                 {
                     "workspace": str(root),
                     "path": relative,
-                    "original_base64": base64.b64encode(original).decode("ascii"),
+                    "original_base64": (
+                        base64.b64encode(original).decode("ascii") if original is not None else None
+                    ),
                 },
                 stream,
             )
@@ -137,12 +140,57 @@ def _journal(root: Path, relative: str, original: bytes) -> Path:
     return Path(name)
 
 
+def _delete_open_file(fd: int) -> None:
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    set_info = kernel.SetFileInformationByHandle
+    set_info.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+    set_info.restype = ctypes.c_int
+    disposition = ctypes.c_ubyte(1)
+    if not set_info(
+        msvcrt.get_osfhandle(fd), 4, ctypes.byref(disposition), ctypes.sizeof(disposition)
+    ):
+        raise OSError(ctypes.get_last_error(), "Cannot remove newly created file")  # type: ignore[attr-defined]
+
+
+def _create_reviewed_file(workspace: Workspace, proposal: Proposal, target: Path) -> str:
+    assert proposal.new_content is not None
+    with _locked_directories(target.parent):
+        recovery = _journal(workspace.root, proposal.path, None)
+        try:
+            fd = _open_exclusive(target, create_new=True)
+        except BaseException:
+            recovery.unlink(missing_ok=True)
+            raise
+        with os.fdopen(fd, "r+b", buffering=0) as stream:
+            try:
+                info = os.fstat(stream.fileno())
+                actual = _handle_path(stream.fileno())
+                if actual != target or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise WorkspaceError("Created file does not match the reviewed target")
+                _write_all(stream, proposal.new_content.encode("utf-8"))
+                stream.truncate()
+                os.fsync(stream.fileno())
+            except BaseException as error:
+                try:
+                    _delete_open_file(stream.fileno())
+                except OSError:
+                    raise WorkspaceError(
+                        f"Creation failed; recovery record is saved in {recovery}"
+                    ) from error
+                recovery.unlink(missing_ok=True)
+                raise WorkspaceError("Creation failed and the new file was removed") from error
+        recovery.unlink(missing_ok=True)
+    return f"Created approved file {proposal.path}."
+
+
 def apply_reviewed_edit(
     workspace: Workspace, proposal: Proposal, review: Callable[[Proposal], bool]
 ) -> str:
-    """Review and apply a single existing file, checking authorization again at the handle."""
-    if proposal.original_digest is None or proposal.new_content is None:
-        raise WorkspaceError("Secure creation and deletion are not yet supported")
+    """Review and create or replace one file, checking authorization at the handle."""
+    if proposal.new_content is None:
+        raise WorkspaceError("Secure deletion is not yet supported")
     if os.name != "nt":
         raise WorkspaceError("Secure edits currently require Windows")
     fresh = propose(workspace, proposal.path, proposal.new_content)
@@ -152,6 +200,8 @@ def apply_reviewed_edit(
     if not review(proposal):
         return "Change rejected; no file was modified."
     target = workspace.path(proposal.path)
+    if proposal.original_digest is None:
+        return _create_reviewed_file(workspace, proposal, target)
     with (
         _locked_directories(target.parent),
         os.fdopen(_open_exclusive(target), "r+b", buffering=0) as stream,

@@ -3,9 +3,9 @@
 An in-progress terminal coding assistant. The current implementation provides a
 Strands agent backed by an explicitly configured Amazon Bedrock model, plus
 guarded repository tools. On Windows it can propose changes to existing UTF-8
-files and apply them after interactive approval. It is not yet a complete coding
-agent: file creation and deletion, sandbox execution, persistent sessions and
-MCP are not enabled.
+files, or create new files, after interactive approval. It is not yet a complete
+coding agent: file deletion, sandbox execution, persistent sessions and MCP are
+not enabled.
 
 ## Install
 

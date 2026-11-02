@@ -67,3 +67,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 - `uv run pytest -q tests/test_edits.py tests/test_approvals.py`: 9 passed. `uv run pytest -q tests/test_agent.py`: 7 passed. `uv run ruff check src tests` and `uv run mypy src`: passed during implementation.
 - File creation, deletion and non-Windows editing remain disabled. The Windows implementation needs additional independent security review and broader filesystem coverage; recovery journals contain source content and inherit the user profile's OS access controls. Docker and live Bedrock remain unverified.
 - After integration: `uv run pytest -q` passed all 29 tests; Ruff lint and format checks and `uv run mypy src` passed.
+
+## 2026-11-02 — Approved file creation on Windows
+
+- The approved-change tool can now create a file in an existing authorized directory using a create-new exclusive handle, preventing overwrite of a file created during review. A failed write marks the new file for deletion through its open handle; the journal records that the original file was absent.
+- Added tests for rejection, approved creation, a racing existing file and removal of a partially written file. `uv run pytest -q`: 30 passed; Ruff lint and format and `uv run mypy src`: passed.
+- File deletion and non-Windows editing remain disabled. The Windows backend still needs broader filesystem and independent security review.

@@ -105,11 +105,47 @@ def test_failed_rollback_retains_recovery_journal(
     assert len(list((tmp_path / ".edge-harness" / "recovery").iterdir())) == 1
 
 
-def test_creation_is_not_implicitly_authorized(tmp_path: Path) -> None:
-    workspace = Workspace(tmp_path)
-    with pytest.raises(WorkspaceError, match="not yet supported"):
-        apply_reviewed_edit(workspace, propose(workspace, "new.txt", "new"), lambda _: True)
-    assert not (tmp_path / "new.txt").exists()
+def test_creation_requires_approval_and_never_overwrites_racing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    workspace = Workspace(root)
+    target = root / "new.txt"
+    proposal = propose(workspace, "new.txt", "new")
+    assert "rejected" in apply_reviewed_edit(workspace, proposal, lambda _: False)
+    assert not target.exists()
+
+    def race(_):
+        target.write_text("concurrent")
+        return True
+
+    with pytest.raises(WorkspaceError, match="exclusive access"):
+        apply_reviewed_edit(workspace, proposal, race)
+    assert target.read_text() == "concurrent"
+    target.unlink()
+    assert "Created" in apply_reviewed_edit(workspace, proposal, lambda _: True)
+    assert target.read_text() == "new"
+
+
+def test_failed_creation_removes_partial_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    workspace = Workspace(root)
+    proposal = propose(workspace, "new.txt", "new")
+
+    def fail_write(stream, content):
+        stream.write(b"partial")
+        raise OSError("simulated failure")
+
+    monkeypatch.setattr(edits, "_write_all", fail_write)
+    with pytest.raises(WorkspaceError, match="new file was removed"):
+        apply_reviewed_edit(workspace, proposal, lambda _: True)
+    assert not (root / "new.txt").exists()
 
 
 def test_directory_swap_after_review_does_not_change_outside_file(tmp_path: Path) -> None:
