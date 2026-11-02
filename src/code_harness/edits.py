@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from code_harness.approvals import validate_reviewable
 from code_harness.proposals import Proposal, propose
 from code_harness.workspace import (
     MAX_FILE_BYTES,
@@ -147,6 +148,7 @@ def apply_reviewed_edit(
     fresh = propose(workspace, proposal.path, proposal.new_content)
     if fresh.original_digest != proposal.original_digest or fresh.diff != proposal.diff:
         raise WorkspaceError("Proposal is stale or does not match its diff")
+    validate_reviewable(proposal)
     if not review(proposal):
         return "Change rejected; no file was modified."
     target = workspace.path(proposal.path)

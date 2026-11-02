@@ -6,7 +6,9 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from code_harness.approvals import review_proposal
 from code_harness.config import Settings
+from code_harness.proposals import Proposal
 from code_harness.streaming import stream_turn
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
@@ -55,12 +57,20 @@ async def _show_turn(agent: object, prompt: str) -> None:
 def _make_agent(workspace: Path) -> object:
     from code_harness.agent import create_agent
 
-    return create_agent(Settings(workspace=workspace))
+    def review(proposal: Proposal) -> bool:
+        return review_proposal(
+            proposal,
+            interactive=sys.stdin.isatty(),
+            display=lambda text: console.print(text, markup=False, highlight=False),
+            read_reply=input,
+        )
+
+    return create_agent(Settings(workspace=workspace), review=review)
 
 
 @app.command()
 def ask(prompt: str, workspace: Path | None = None) -> None:
-    """Ask a read-only question about a workspace."""
+    """Ask a question about a workspace; edits require approval."""
     try:
         asyncio.run(_show_turn(_make_agent(workspace or Path.cwd()), prompt))
     except KeyboardInterrupt:
@@ -75,11 +85,11 @@ def ask(prompt: str, workspace: Path | None = None) -> None:
 
 @app.command()
 def chat(workspace: Path | None = None) -> None:
-    """Start a read-only interactive conversation."""
+    """Start an interactive conversation; edits require approval."""
     workspace = workspace or Path.cwd()
     try:
         agent = _make_agent(workspace)
-        console.print("Read-only session. Type /help for commands.")
+        console.print("Edits to existing files require approval. Type /help for commands.")
         while True:
             try:
                 prompt = input("You > ").strip()
@@ -93,7 +103,7 @@ def chat(workspace: Path | None = None) -> None:
                 agent = _make_agent(workspace)
                 console.print("Started a new in-memory conversation.")
             elif prompt == "/status":
-                console.print(f"Workspace: {workspace.resolve()} (read-only, in-memory)")
+                console.print(f"Workspace: {workspace.resolve()} (in-memory session)")
             elif prompt:
                 try:
                     asyncio.run(_show_turn(agent, prompt))

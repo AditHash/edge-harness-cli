@@ -1,10 +1,14 @@
 import asyncio
+import json
+import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from strands.models import Model
 
 from code_harness.agent import create_agent
+from code_harness.approvals import review_proposal
 from code_harness.config import Settings
 from code_harness.streaming import stream_turn
 
@@ -137,3 +141,67 @@ def test_two_turns_preserve_conversation_with_real_strands_agent(tmp_path: Path)
     assert "First instruction" in str(requests[1])
     assert "Acknowledged" in str(requests[1])
     assert "Follow-up" in str(requests[1])
+
+
+@pytest.mark.skipif(os.name != "nt", reason="secure edits currently require Windows")
+@pytest.mark.parametrize("answer, expected", [("yes", b"new\n"), ("no", b"old\n")])
+def test_agent_edit_requires_exact_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str, expected: bytes
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "app.py"
+    target.write_bytes(b"old\n")
+    shown = []
+    calls = 0
+
+    async def model_stream(messages, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        yield {"messageStart": {"role": "assistant"}}
+        if calls == 1:
+            yield {
+                "contentBlockStart": {
+                    "start": {"toolUse": {"toolUseId": "edit1", "name": "edit_code"}}
+                }
+            }
+            yield {
+                "contentBlockDelta": {
+                    "delta": {
+                        "toolUse": {"input": json.dumps({"path": "app.py", "new_content": "new\n"})}
+                    }
+                }
+            }
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Done"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+
+    def review(proposal):
+        return review_proposal(
+            proposal, interactive=True, display=shown.append, read_reply=lambda _: answer
+        )
+
+    agent = create_agent(Settings(workspace=root), model=model, review=review)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "change the file")]
+
+    asyncio.run(run())
+    assert calls == 2
+    assert len(shown) == 1 and "-old" in shown[0] and "+new" in shown[0]
+    assert target.read_bytes() == expected

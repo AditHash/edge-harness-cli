@@ -1,9 +1,11 @@
 # Edge Code Harness
 
 An in-progress terminal coding assistant. The current implementation provides a
-read-only Strands agent backed by an explicitly configured Amazon Bedrock model,
-plus guarded repository tools. It is not yet a complete coding agent: edits,
-sandbox execution, persistent sessions and MCP are not enabled.
+Strands agent backed by an explicitly configured Amazon Bedrock model, plus
+guarded repository tools. On Windows it can propose changes to existing UTF-8
+files and apply them after interactive approval. It is not yet a complete coding
+agent: file creation and deletion, sandbox execution, persistent sessions and
+MCP are not enabled.
 
 ## Install
 
@@ -31,6 +33,14 @@ The CLI sends prompts and accessible source content to the selected Bedrock
 model when used. Do not use it on a repository whose content you are not
 authorized to send to the model provider. Workspace protections are under
 active development and are not a substitute for OS-level isolation.
+
+On Windows, approved edits use an exclusive file handle and guard ancestor
+directories against renaming. A recovery journal containing the original bytes
+is created under `~/.edge-harness/recovery` before an edit and removed after
+success or successful rollback. The journal is not encrypted; protect the user
+profile with appropriate OS permissions and keep any remaining recovery file
+private. On other operating systems editing is disabled pending a verified
+equivalent boundary. Non-interactive input cannot approve edits.
 
 ## Development
 

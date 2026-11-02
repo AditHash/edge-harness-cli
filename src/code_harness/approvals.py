@@ -7,6 +7,16 @@ from code_harness.proposals import Proposal
 from code_harness.workspace import WorkspaceError
 
 
+def validate_reviewable(proposal: Proposal) -> None:
+    """Reject controls that could falsify the diff shown in a terminal."""
+    if any(
+        category(char).startswith("C") and char not in "\n\r\t" for char in proposal.diff
+    ) or "\r" in proposal.diff.replace("\r\n", ""):
+        raise WorkspaceError(
+            "Diff contains terminal control characters and cannot be reviewed safely"
+        )
+
+
 def review_proposal(
     proposal: Proposal,
     *,
@@ -16,15 +26,9 @@ def review_proposal(
 ) -> bool:
     """Show the exact diff and require an affirmative decision for this proposal.
 
-    A non-interactive caller is never allowed to grant approval. Escape/control
-    sequences are rejected instead of being allowed to manipulate the terminal.
+    A non-interactive caller is never allowed to grant approval.
     """
-    if any(
-        category(char).startswith("C") and char not in "\n\r\t" for char in proposal.diff
-    ) or "\r" in proposal.diff.replace("\r\n", ""):
-        raise WorkspaceError(
-            "Diff contains terminal control characters and cannot be reviewed safely"
-        )
+    validate_reviewable(proposal)
     if not interactive:
         return False
     try:
