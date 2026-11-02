@@ -13,6 +13,19 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
     async for event in agent.stream_async(prompt, limits={"turns": 20, "output_tokens": 32768}):
         if isinstance(event.get("data"), str):
             yield AgentEvent("text_delta", event["data"])
+        elif event.get("reasoning") and isinstance(event.get("reasoningText"), str):
+            # Reasoning text is not shown; its size drives a live token counter.
+            yield AgentEvent("reasoning", event["reasoningText"])
+        elif isinstance(event.get("event"), dict) and isinstance(
+            event["event"].get("metadata"), dict
+        ):
+            usage = event["event"]["metadata"].get("usage") or {}
+            yield AgentEvent(
+                "call_usage",
+                "",
+                int(usage.get("inputTokens", 0) or 0),
+                int(usage.get("outputTokens", 0) or 0),
+            )
         elif event.get("current_tool_use", {}).get("name"):
             tool = event["current_tool_use"]
             tool_id = tool.get("toolUseId")

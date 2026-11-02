@@ -118,9 +118,31 @@ class HarnessApp(App[None]):
     def run_turn(self, prompt: str) -> None:
         async def go() -> None:
             buffer: list[str] = []
+            thinking: list[str] = []
+
+            def flush_thinking() -> None:
+                if thinking:
+                    text = "".join(thinking)
+                    self.call_from_thread(
+                        self.log_line, f"Thinking (~{len(text) // 4:,} tokens):\n{text}"
+                    )
+                    thinking.clear()
+
             async for event in stream_turn(self.agent, prompt):
+                if event.kind == "reasoning":
+                    thinking.append(event.text)
+                    size = sum(len(part) for part in thinking)
+                    self.call_from_thread(self.set_status, f"Thinking... ~{size // 4:,} tokens")
+                    continue
+                flush_thinking()
                 if event.kind == "text_delta":
                     buffer.append(event.text)
+                    continue
+                if event.kind == "call_usage":
+                    self.call_from_thread(
+                        self.set_status,
+                        f"Last model call: {event.input_tokens:,} in / {event.output_tokens:,} out",
+                    )
                     continue
                 if buffer:
                     self.call_from_thread(self.log_line, "".join(buffer))
@@ -128,6 +150,7 @@ class HarnessApp(App[None]):
                 if event.kind == "usage":
                     self.tracker.add(event.input_tokens, event.output_tokens)
                 self.call_from_thread(self.log_line, f"[{event.kind}] {event.text}".rstrip())
+            flush_thinking()
             if buffer:
                 self.call_from_thread(self.log_line, "".join(buffer))
 

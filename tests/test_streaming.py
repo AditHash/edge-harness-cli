@@ -85,3 +85,74 @@ def test_usage_events_feed_cumulative_tracker() -> None:
     assert (tracker.input_tokens, tracker.output_tokens, tracker.turns) == (2000, 1000, 2)
     assert tracker.cost is not None and abs(tracker.cost - 0.021) < 1e-9
     assert "Cost unknown" in UsageTracker().summary()
+
+
+def test_reasoning_and_per_call_usage_are_reported() -> None:
+    class ThinkingAgent:
+        async def stream_async(self, prompt, **kwargs):
+            yield {"reasoningText": "let me think", "delta": {}, "reasoning": True}
+            yield {"reasoningText": " more", "delta": {}, "reasoning": True}
+            yield {"event": {"metadata": {"usage": {"inputTokens": 120, "outputTokens": 45}}}}
+            yield {"data": "answer"}
+            yield {"result": SimpleNamespace(stop_reason="end_turn", invocation_context=None)}
+
+    async def collect():
+        return [event async for event in stream_turn(ThinkingAgent(), "hi")]
+
+    events = asyncio.run(collect())
+    assert [e.kind for e in events] == [
+        "reasoning",
+        "reasoning",
+        "call_usage",
+        "text_delta",
+        "turn_completed",
+    ]
+    assert (events[2].input_tokens, events[2].output_tokens) == (120, 45)
+
+
+def test_cli_thinking_meter_counts_and_clears(monkeypatch) -> None:
+    from code_harness import cli
+
+    class Status:
+        def __init__(self):
+            self.messages: list[str] = []
+            self.stopped = False
+
+        def start(self):
+            pass
+
+        def update(self, message):
+            self.messages.append(message)
+
+        def stop(self):
+            self.stopped = True
+
+    created: list[Status] = []
+    printed: list[str] = []
+
+    def fake_status(message, spinner=None):
+        status = Status()
+        status.messages.append(message)
+        created.append(status)
+        return status
+
+    monkeypatch.setattr(cli.console, "status", fake_status)
+    monkeypatch.setattr(
+        cli.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else "")
+    )
+    shown = cli._ThinkingMeter(show=True)
+    shown.add("step one ")
+    shown.add("x" * 391)
+    shown.stop()
+    assert "step one " in printed and any("thinking: ~100 tokens" in line for line in printed)
+    assert created == []  # visible mode prints the text, no spinner
+
+    printed.clear()
+    hidden = cli._ThinkingMeter(show=False)
+    hidden.add("x" * 400)
+    hidden.add("x" * 400)
+    assert created[0].messages[-1] == "Thinking... ~200 tokens"
+    assert not any("x" * 400 in line for line in printed)
+    hidden.stop()
+    assert created[0].stopped and any("thinking: ~200 tokens" in line for line in printed)
+    hidden.stop()  # idempotent

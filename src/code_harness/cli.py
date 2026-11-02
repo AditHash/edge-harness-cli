@@ -102,22 +102,73 @@ def doctor() -> None:
     console.print("No AWS calls were made. Credentials may also be supplied by the provider chain.")
 
 
+class _ThinkingMeter:
+    """Streams the model's reasoning (dimmed) and counts it (~4 characters per token).
+
+    With ``show`` off, a spinner with the running count replaces the text.
+    """
+
+    def __init__(self, show: bool = True) -> None:
+        self.show = show
+        self.chars = 0
+        self.active = False
+        self.status: Any = None
+
+    def add(self, text: str) -> None:
+        self.chars += len(text)
+        if self.show:
+            if not self.active:
+                console.print("\n[dim]Thinking:[/dim]")
+            console.print(text, end="", style="dim italic", markup=False, highlight=False)
+        else:
+            message = f"Thinking... ~{self.chars // 4:,} tokens"
+            if self.status is None:
+                self.status = console.status(message, spinner="dots")
+                self.status.start()
+            else:
+                self.status.update(message)
+        self.active = True
+
+    def stop(self) -> None:
+        if not self.active:
+            return
+        if self.status is not None:
+            self.status.stop()
+            self.status = None
+        console.print(f"\n[dim](thinking: ~{self.chars // 4:,} tokens)[/dim]")
+        self.active = False
+        self.chars = 0
+
+
 async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = None) -> None:
-    async for event in stream_turn(agent, prompt):
-        if event.kind == "text_delta":
-            console.print(event.text, end="", markup=False, highlight=False, soft_wrap=True)
-        elif event.kind == "tool_started":
-            console.print(f"\n[dim]Tool: {event.text}[/dim]")
-        elif event.kind == "tool_result":
-            console.print(f"[dim]{event.text}[/dim]")
-        elif event.kind == "usage":
-            if tracker is not None:
-                tracker.add(event.input_tokens, event.output_tokens)
-            console.print(f"\n[dim]{event.text}[/dim]")
-        elif event.kind == "compacted":
-            console.print(f"\n[cyan]{event.text}[/cyan]")
-        elif event.kind == "error":
-            console.print(f"\n[yellow]{event.text}[/yellow]")
+    meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
+    try:
+        async for event in stream_turn(agent, prompt):
+            if event.kind == "reasoning":
+                meter.add(event.text)
+                continue
+            meter.stop()
+            if event.kind == "text_delta":
+                console.print(event.text, end="", markup=False, highlight=False, soft_wrap=True)
+            elif event.kind == "tool_started":
+                console.print(f"\n[dim]Tool: {event.text}[/dim]")
+            elif event.kind == "tool_result":
+                console.print(f"[dim]{event.text}[/dim]")
+            elif event.kind == "call_usage":
+                console.print(
+                    f"\n[dim]model call: {event.input_tokens:,} in / "
+                    f"{event.output_tokens:,} out[/dim]"
+                )
+            elif event.kind == "usage":
+                if tracker is not None:
+                    tracker.add(event.input_tokens, event.output_tokens)
+                console.print(f"\n[dim]{event.text}[/dim]")
+            elif event.kind == "compacted":
+                console.print(f"\n[cyan]{event.text}[/cyan]")
+            elif event.kind == "error":
+                console.print(f"\n[yellow]{event.text}[/yellow]")
+    finally:
+        meter.stop()
     console.print()
 
 
