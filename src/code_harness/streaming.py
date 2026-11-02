@@ -36,6 +36,8 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
                     "usage",
                     f"Input tokens: {usage.get('inputTokens', 0)}; "
                     f"output tokens: {usage.get('outputTokens', 0)}",
+                    int(usage.get("inputTokens", 0) or 0),
+                    int(usage.get("outputTokens", 0) or 0),
                 )
             reason = getattr(result, "stop_reason", "end_turn")
             if reason in {"end_turn", "stop_sequence"}:

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     sandbox_wsl_distribution: str = "Ubuntu"
     harness_state_dir: Path = Field(default_factory=lambda: Path.home() / ".edge-harness")
     harness_enable_explorer: bool = False
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
     workspace: Path = Field(default_factory=Path.cwd)
 
     @field_validator("workspace")

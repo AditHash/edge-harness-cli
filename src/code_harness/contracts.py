@@ -6,6 +6,8 @@ from typing import Literal, Protocol
 class AgentEvent:
     kind: Literal["text_delta", "tool_started", "tool_result", "error", "turn_completed", "usage"]
     text: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class SearchService(Protocol):

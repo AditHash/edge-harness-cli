@@ -16,6 +16,7 @@ from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
+from code_harness.usage import UsageTracker
 from code_harness.workspace import Workspace, WorkspaceError
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
@@ -46,7 +47,7 @@ def doctor() -> None:
     console.print("No AWS calls were made. Credentials may also be supplied by the provider chain.")
 
 
-async def _show_turn(agent: object, prompt: str) -> None:
+async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = None) -> None:
     async for event in stream_turn(agent, prompt):
         if event.kind == "text_delta":
             console.print(event.text, end="", markup=False, highlight=False, soft_wrap=True)
@@ -55,6 +56,8 @@ async def _show_turn(agent: object, prompt: str) -> None:
         elif event.kind == "tool_result":
             console.print(f"[dim]{event.text}[/dim]")
         elif event.kind == "usage":
+            if tracker is not None:
+                tracker.add(event.input_tokens, event.output_tokens)
             console.print(f"\n[dim]{event.text}[/dim]")
         elif event.kind == "error":
             console.print(f"\n[yellow]{event.text}[/yellow]")
@@ -195,6 +198,7 @@ def chat(
         )
         mcp_tools = _open_mcp(stack, mcp_config, settings)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
+        tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
@@ -215,7 +219,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -273,13 +277,15 @@ def chat(
                     console.print(
                         f"Model changed to {candidate}. Access is checked on the next request."
                     )
+            elif prompt == "/usage":
+                console.print(tracker.summary(), markup=False)
             elif prompt == "/status":
                 console.print(f"Workspace: {workspace.resolve()}; session: {session_id}")
             elif prompt.startswith("/"):
                 console.print("Unknown command. Type /help to see available commands.")
             elif prompt:
                 try:
-                    asyncio.run(_show_turn(agent, prompt))
+                    asyncio.run(_show_turn(agent, prompt, tracker))
                 except KeyboardInterrupt:
                     console.print("\nTurn cancelled.")
                 except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
