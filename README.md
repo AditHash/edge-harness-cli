@@ -93,7 +93,7 @@ them. POSIX edit tests run only on Linux/macOS (see build log for how they were 
 
 ## Known limitations
 
-- Live runs did not cover approved edits/commands, MCP or the TUI with a real model. Summaries are lossy.
+- Live runs used script-granted approvals (`scripts/live_scenarios.py`); remote MCP was not run live. Summaries are lossy.
 - macOS command sandbox is not implemented; native Linux was exercised only through WSL's Linux.
 - The sandbox shares the host kernel (no aggregate cgroup quota); trust the distribution.
 - Retrieval is lexical BM25. Semantic embeddings would send repository text to a provider.

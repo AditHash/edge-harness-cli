@@ -147,3 +147,12 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Results: streaming `ask` OK (1422 in / 23 out); two-turn `chat` with `/usage` OK (session total 2885 in / 82 out); `--resume` restored context across a new process (model recalled the first request); Haiku 4.5 `ask` on the shop fixture used `list_repo`, `read_code` and produced an accurate cited architecture summary including `shop/cart.py` bulk discount. Nova Lite did not use `find_relevant_code` or read files and gave a poor answer: model choice matters.
 - Real `/compact` after 8 turns: "Compacted 3 older messages into a model-written summary"; the small model then could not recall a detail from a compacted turn, so summaries are lossy.
 - Not exercised live: approved edits and sandbox commands (piped stdin is not a TTY, so approvals correctly deny), MCP with a live model, `harness tui` with a live model. Cost not measured; prices unset.
+
+## 2026-11-02 — Live approval-gated scenarios (B, C, F, TUI)
+
+- `scripts/live_scenarios.py` with `in.anthropic.claude-haiku-4-5-20251001-v1:0`, ap-south-1. The script grants approvals in place of a person and prints every approved diff, command and MCP call. Workspaces are under `./.live-smoke` (gitignored).
+- B: model read `shop/cart.py`, proposed `BULK_THRESHOLD = 10` to `5` (exact one-line diff), approved, file changed. 5919 in / 427 out.
+- C: model ran `python3 -m unittest -q` in the WSL sandbox (fail), read files, fixed `len(values) + 1` to `len(values)` in `calc.py` (not the test), reran (OK) and reported the real result. Two approved commands, one approved edit. 13784 in / 592 out.
+- F: model called the sandboxed fixture MCP tool `fixture_probe` once after approval and reported `isolated`. 3150 in / 62 out.
+- TUI: headless Textual pilot, one real streamed turn, usage tracked (1462 in / 4 out).
+- RESULTS: B, C, F, TUI all True. Human-typed approval at a real TTY was not exercised; the approval functions themselves are covered by offline tests.

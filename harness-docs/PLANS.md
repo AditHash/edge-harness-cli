@@ -73,6 +73,7 @@ and test-runner specialists, cumulative usage, Textual UI, ranked LangChain retr
 POSIX reviewed edits, native Linux sandbox backend, repository-analysis and debugging scenario tests.
 
 Live Bedrock (Scenario G) verified for streaming, resume, tool-using analysis and compaction (build log).
-Not done / unverified: live edits/commands/MCP/TUI with a real model; macOS command sandbox (disabled by design); native Linux and POSIX edits verified
+Live edits, sandboxed debugging, local MCP and the TUI also verified with a real model (script approvals).
+Not done / unverified: remote MCP with a real model; macOS command sandbox (disabled by design); native Linux and POSIX edits verified
 only through WSL's Linux Python, not a separate Linux machine; semantic embeddings; sanitized
 tracing; LangGraph and Deep Agents (rejected for lack of measured benefit).
