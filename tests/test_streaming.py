@@ -34,3 +34,32 @@ def test_tool_events_are_deduplicated_and_truncation_is_reported() -> None:
     events = asyncio.run(collect())
     assert [event.kind for event in events] == ["tool_started", "error"]
     assert "max_tokens" in events[-1].text
+
+
+def test_tool_result_is_reported_without_exposing_tool_contents() -> None:
+    class ToolAgent:
+        async def stream_async(self, prompt):
+            yield {"current_tool_use": {"toolUseId": "one", "name": "read_code"}}
+            yield {
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "toolResult": {
+                                "toolUseId": "one",
+                                "status": "error",
+                                "content": [{"text": "sensitive"}],
+                            }
+                        }
+                    ],
+                }
+            }
+            yield {"result": SimpleNamespace(stop_reason="end_turn", invocation_context=None)}
+
+    async def collect():
+        return [event async for event in stream_turn(ToolAgent(), "hi")]
+
+    events = asyncio.run(collect())
+    assert [event.kind for event in events] == ["tool_started", "tool_result", "turn_completed"]
+    assert events[1].text == "read_code: failed"
+    assert "sensitive" not in str(events)

@@ -7,7 +7,7 @@ from code_harness.contracts import AgentEvent
 
 
 async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
-    seen_tools: set[str] = set()
+    seen_tools: dict[str, str] = {}
     async for event in agent.stream_async(prompt):
         if isinstance(event.get("data"), str):
             yield AgentEvent("text_delta", event["data"])
@@ -15,8 +15,18 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
             tool = event["current_tool_use"]
             tool_id = tool.get("toolUseId")
             if tool_id and tool_id not in seen_tools:
-                seen_tools.add(tool_id)
+                seen_tools[tool_id] = tool["name"]
                 yield AgentEvent("tool_started", tool["name"])
+        elif isinstance(event.get("message"), dict):
+            for block in event["message"].get("content", []):
+                result = block.get("toolResult") if isinstance(block, dict) else None
+                if isinstance(result, dict):
+                    result_id = result.get("toolUseId")
+                    tool_name = (
+                        seen_tools.get(result_id, "tool") if isinstance(result_id, str) else "tool"
+                    )
+                    status = "failed" if result.get("status") == "error" else "finished"
+                    yield AgentEvent("tool_result", f"{tool_name}: {status}")
         elif "result" in event:
             result = event["result"]
             context = getattr(result, "invocation_context", None)

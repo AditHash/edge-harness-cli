@@ -43,6 +43,8 @@ async def _show_turn(agent: object, prompt: str) -> None:
             console.print(event.text, end="", markup=False, highlight=False, soft_wrap=True)
         elif event.kind == "tool_started":
             console.print(f"\n[dim]Tool: {event.text}[/dim]")
+        elif event.kind == "tool_result":
+            console.print(f"[dim]{event.text}[/dim]")
         elif event.kind == "usage":
             console.print(f"\n[dim]{event.text}[/dim]")
         elif event.kind == "error":
