@@ -26,9 +26,26 @@ app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
 console = Console()
 
 
+def _failure_message(exc: BaseException) -> str:
+    """Actionable text without provider error contents."""
+    name = type(exc).__name__
+    if name == "MaxTokensReachedException":
+        return (
+            "Turn stopped: the model hit its output limit (BEDROCK_MAX_TOKENS). Nothing was "
+            "changed by the unfinished step. Ask for a smaller change, or raise the limit."
+        )
+    if name in {"ExpiredTokenException", "NoCredentialsError", "UnauthorizedSSOTokenError"}:
+        return "Turn failed: AWS credentials are missing or expired. Run `aws login`."
+    return f"Turn failed ({name})."
+
+
 @app.callback()
 def main() -> None:
     """Inspect and work with a repository using an AI assistant."""
+    import logging
+
+    # SDK warnings can echo raw tool input; keep the terminal to our own messages.
+    logging.getLogger("strands").setLevel(logging.ERROR)
     # Model output may contain characters the legacy Windows code page cannot encode.
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
@@ -357,7 +374,7 @@ def chat(
                 except KeyboardInterrupt:
                     console.print("\nTurn cancelled.")
                 except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
-                    console.print(f"[red]Turn failed ({type(exc).__name__}).[/red]")
+                    console.print(f"[red]{_failure_message(exc)}[/red]", markup=True)
     except KeyboardInterrupt:
         console.print("\nSession ended.")
     except WorkspaceError as exc:

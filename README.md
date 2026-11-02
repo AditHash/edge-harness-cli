@@ -68,7 +68,7 @@ uv run harness tui  --workspace C:\path\to\repo
 uv run harness ask "Explain the architecture" --workspace C:\path\to\repo
 ```
 
-Settings (environment variables): `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`,
+Settings (environment variables): `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`, `BEDROCK_MAX_TOKENS`,
 `SANDBOX_WSL_DISTRIBUTION`, `HARNESS_STATE_DIR` (default `~/.edge-harness`),
 `HARNESS_ENABLE_EXPLORER`, `HARNESS_ENABLE_REVIEWER`, `HARNESS_ENABLE_TESTER` (all `true`/`false`),
 `INPUT_PRICE_PER_MTOK`, `OUTPUT_PRICE_PER_MTOK`. Full guides: [CLI reference](harness-docs/docs/CLI.md),

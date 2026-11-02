@@ -442,3 +442,55 @@ def test_reviewer_is_read_only_and_tester_needs_sandbox(tmp_path: Path) -> None:
         "git_diff",
     }
     assert "run_tests" not in agent.tool_registry.registry
+
+
+def _call_tool(agent, name: str, **arguments):
+    return agent.tool_registry.registry[name](**arguments)
+
+
+def test_replace_in_file_requires_unique_snippet_and_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    target = root / "README.md"
+    target.write_text("# Title\nold line\nold line\nend\n")
+    reviewed: list[str] = []
+    decision = {"approve": True}
+
+    def review(proposal) -> bool:
+        reviewed.append(proposal.diff)
+        return decision["approve"]
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.estimate_utilization.return_value = 0.0
+    agent = create_agent(Settings(workspace=root), model=model, review=review)
+    replace = agent.tool_registry.registry["replace_in_file"]._tool_func
+
+    assert "found 2" in replace("README.md", "old line", "x")
+    assert "found 0" in replace("README.md", "missing", "x")
+    assert reviewed == []
+    decision["approve"] = False
+    assert "rejected" in replace("README.md", "end\n", "fin\n")
+    assert target.read_text().endswith("end\n")
+    decision["approve"] = True
+    assert "Applied" in replace("README.md", "# Title\n", "# New title\n")
+    assert target.read_text().startswith("# New title\nold line")
+    assert "-# Title" in reviewed[-1] and "+# New title" in reviewed[-1]
+    assert "Access denied" in replace(".env", "a", "b") or "not applied" in replace(
+        ".env", "a", "b"
+    )
+
+
+def test_max_tokens_is_configurable_and_failure_is_actionable(tmp_path: Path) -> None:
+    from strands.types.exceptions import MaxTokensReachedException
+
+    from code_harness.cli import _failure_message
+
+    assert Settings(workspace=tmp_path).bedrock_max_tokens == 16384
+    assert Settings(workspace=tmp_path, bedrock_max_tokens=4096).bedrock_max_tokens == 4096
+    message = _failure_message(MaxTokensReachedException("secret provider text"))
+    assert "output limit" in message and "secret" not in message

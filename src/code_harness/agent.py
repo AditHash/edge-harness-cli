@@ -47,7 +47,7 @@ def create_agent(
         model = BedrockModel(
             model_id=settings.bedrock_model_id,
             region_name=settings.aws_region,
-            max_tokens=4096,
+            max_tokens=settings.bedrock_max_tokens,
         )
     workspace = Workspace(settings.workspace)
     search_pipeline = RunnableLambda(workspace.search)
@@ -182,6 +182,32 @@ def create_agent(
         tools.append(edit_code)
 
         @tool
+        def replace_in_file(path: str, old_text: str, new_text: str) -> str:
+            """Replace one exact, unique snippet in an existing file; the user must approve the
+            diff. Prefer this over edit_code for changes to existing files: it is far shorter."""
+            try:
+                current = workspace.read(path)
+                count = current.count(old_text) if old_text else 0
+                if count == 0 and old_text and "\r\n" in current:
+                    # Models send "\n"; keep the file's CRLF convention.
+                    old_text, new_text = (
+                        value.replace("\r\n", "\n").replace("\n", "\r\n")
+                        for value in (old_text, new_text)
+                    )
+                    count = current.count(old_text)
+                if count != 1:
+                    return (
+                        "Edit not applied: old_text must occur exactly once "
+                        f"(found {count}). Read the file and copy a larger unique snippet."
+                    )
+                proposal = propose(workspace, path, current.replace(old_text, new_text, 1))
+                return apply_reviewed_edit(workspace, proposal, review)
+            except WorkspaceError as exc:
+                return f"Edit not applied: {exc}"
+
+        tools.append(replace_in_file)
+
+        @tool
         def delete_code(path: str) -> str:
             """Propose deleting one existing UTF-8 file; the user must approve the diff."""
             try:
@@ -192,6 +218,8 @@ def create_agent(
         tools.append(delete_code)
         instructions += (
             "\nYou may propose creating, changing or deleting files; every change needs user approval. "
+            "Use replace_in_file for changes to existing files and edit_code only for new or "
+            "small files; whole-file rewrites can exceed the output limit. "
             "Never claim a file changed unless the tool reports success."
         )
 

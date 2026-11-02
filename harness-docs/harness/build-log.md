@@ -162,3 +162,10 @@ This file is an **evidence log**, not a place to report intended work as complet
 - New entry point `edge-harness` (`code_harness/launcher.py`): chat (or `--tui`) in the current folder; `--region/--model/--profile` validated and saved atomically to `<HARNESS_STATE_DIR>/settings.json` (0600, no credentials, tampered values ignored, env wins); STS `GetCallerIdentity` pre-check; interactive `aws login [--profile] [--region]` when credentials are missing/expired, then re-check; non-interactive stops with a message.
 - `tests/test_launcher.py`: 12 passed. Full default suite 89 passed, 14 skipped. Ruff and mypy clean.
 - Installed with `uv tool install --editable .` (user tools dir). Live: saved ap-south-1 + Haiku 4.5, ran `edge-harness` from `.live-smoke/launcher` with no env vars; chat replied `ok` (1773 in / 4 out). With a nonexistent profile and piped stdin it refused with the login message. The automatic interactive `aws login` path was not exercised live (credentials were valid); it is unit-tested with injected check/login functions.
+
+## 2026-11-03 — Fix: large-file edits hit the output cap
+
+- User report: asking to update a README in a real repo ended with `Turn failed (MaxTokensReachedException)`; `edit_code` needs the whole file in one tool call and `max_tokens` was fixed at 4096.
+- Fixes: `replace_in_file(path, old_text, new_text)` (exact unique snippet, same diff review and apply path; CRLF files accept `
+` snippets); `BEDROCK_MAX_TOKENS` setting, default 16384; instructions prefer `replace_in_file`; actionable output-limit and expired-credential messages; Strands SDK warnings (which echoed raw tool input) silenced in the CLI.
+- Tests: 91 passed, 14 skipped; Ruff and mypy clean. Live (Haiku 4.5, ap-south-1, script approval): an 11 KB README intro update used `read_code` then `replace_in_file`, one 10-line diff, 361 output tokens, file updated correctly.

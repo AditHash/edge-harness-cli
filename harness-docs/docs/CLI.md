@@ -30,7 +30,7 @@ Non-interactive stdin never approves anything.
 ## Agent tools
 
 Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_status`,
-`git_diff`, `update_plan`. With approval: `edit_code`, `delete_code` (diff review), `run_sandboxed`
+`git_diff`, `update_plan`. With approval: `replace_in_file` (exact unique snippet, preferred), `edit_code`, `delete_code` (diff review), `run_sandboxed`
 (command review; only where a sandbox backend exists). Opt-in specialists: `explore_repo`,
 `review_changes`, `run_tests`. MCP tools appear with the server name as prefix.
 
@@ -40,6 +40,7 @@ Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_s
 | --- | --- | --- |
 | `AWS_REGION`, `AWS_PROFILE` | none | Bedrock region/profile |
 | `BEDROCK_MODEL_ID` | none | Model or inference profile id |
+| `BEDROCK_MAX_TOKENS` | `16384` | Output cap per model call (256-65536) |
 | `SANDBOX_WSL_DISTRIBUTION` | `Ubuntu` | WSL distro (Windows) |
 | `HARNESS_STATE_DIR` | `~/.edge-harness` | Sessions database and MCP scratch |
 | `HARNESS_ENABLE_EXPLORER/REVIEWER/TESTER` | `false` | Opt-in specialists (extra model calls) |
