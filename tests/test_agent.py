@@ -102,3 +102,38 @@ def test_strands_invokes_langchain_search_without_exposing_env(tmp_path: Path) -
     assert len(observed) == 2
     assert "app.py:1" in str(observed[-1])
     assert "SECRET" not in str(observed[-1])
+
+
+def test_two_turns_preserve_conversation_with_real_strands_agent(tmp_path: Path) -> None:
+    requests = []
+
+    async def model_stream(messages, *args, **kwargs):
+        requests.append([message.copy() for message in messages])
+        yield {"messageStart": {"role": "assistant"}}
+        yield {"contentBlockDelta": {"delta": {"text": "Acknowledged"}}}
+        yield {"contentBlockStop": {}}
+        yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+    agent = create_agent(Settings(workspace=tmp_path), model=model)
+
+    async def run(prompt: str) -> None:
+        async for _ in stream_turn(agent, prompt):
+            pass
+
+    # The terminal uses a separate asyncio.run for each input.
+    asyncio.run(run("First instruction"))
+    asyncio.run(run("Follow-up"))
+    assert len(requests) == 2
+    assert "First instruction" in str(requests[1])
+    assert "Acknowledged" in str(requests[1])
+    assert "Follow-up" in str(requests[1])
