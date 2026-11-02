@@ -3,8 +3,8 @@
 An in-progress terminal coding assistant. The current implementation provides a
 Strands agent backed by an explicitly configured Amazon Bedrock model, plus
 guarded repository tools. On Windows it can propose changes to existing UTF-8
-files, create new files, or delete files after interactive approval. It is not
-yet a complete coding agent: durable sessions and MCP are not enabled.
+files, create new files, or delete files after interactive approval. Completed
+chat turns can be resumed from local SQLite storage. MCP is not enabled yet.
 
 ## Install
 
@@ -40,6 +40,16 @@ success or successful rollback. The journal is not encrypted; protect the user
 profile with appropriate OS permissions and keep any remaining recovery file
 private. On other operating systems editing is disabled pending a verified
 equivalent boundary. Non-interactive input cannot approve edits.
+
+Interactive chat stores completed conversations in
+`~/.edge-harness/sessions.sqlite` by default. Use `/sessions` to list sessions
+for the current workspace, `/resume ID` to continue one, and `/new` or `/clear`
+to start another. `harness chat --resume ID` also resumes a session. Set
+`HARNESS_STATE_DIR` to change the storage directory. The database contains
+conversation and tool context in plaintext and inherits your user profile's OS
+access controls. An interrupted or failed turn is not saved as a completed turn;
+an edit already approved during that turn may still have been applied, but it
+will not be automatically replayed on resume.
 
 ## Isolated commands on Windows
 

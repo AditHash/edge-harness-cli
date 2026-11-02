@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.runnables import RunnableLambda
 from strands import tool
 from strands.models import BedrockModel, Model
+from strands.session.session_manager import SessionManager
 from strands.types.tools import ToolContext
 from strands_harness import create_harness
 
@@ -26,6 +27,7 @@ def create_agent(
     model: Model | None = None,
     review: Callable[[Proposal], bool] | None = None,
     review_command: Callable[[str], bool] | None = None,
+    session_manager: SessionManager | None = None,
 ) -> Any:
     if model is None:
         if not settings.bedrock_model_id or not settings.aws_region:
@@ -128,9 +130,10 @@ def create_agent(
         builtin_plugins=[],
         skills=False,
         memory=False,
-        session=False,
+        session=session_manager if session_manager is not None else False,
         background_tasks=False,
         caching=False,
         context_manager=False,
         callback_handler=None,
+        agent_id="coding-agent",
     )

@@ -86,3 +86,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 - `HARNESS_TEST_WSL=1 uv run pytest -q tests/test_sandbox.py`: 7 passed with real local WSL. Checks include actual passing and failing unittest runs, blocked outbound networking, hidden host paths and environment canary, unchanged live files, timeout, output cap and cancellation with no remaining test process. The mocked Strands agent also invoked a real approved sandbox command successfully.
 - Default `uv run pytest -q`: 35 passed, 5 WSL-dependent checks skipped. Ruff and mypy passed during integration. The sandbox shares the WSL kernel, trusts its configured distribution, and has per-process memory limits but no aggregate cgroup memory quota. Binary, oversized and inaccessible files are omitted and reported; dependency directories are excluded.
 - Strands Box currently documents Windows and Linux as unsupported. The SDK and Deep Agents both have pluggable sandbox APIs; the current Strands tool uses our audited boundary directly and does not add a second agent loop.
+
+## 2026-11-02 — Workspace-scoped durable sessions
+
+- Added a SQLite storage adapter for the installed Strands snapshot manager, bound session IDs to the canonical workspace, and implemented `/sessions`, `/resume ID`, `/new`, `/clear`, `/status`, and `chat --resume`.
+- Only completed turns are saved. An offline model failure immediately after an approved file edit did not replay that edit or restore a pending tool call when a new agent was created. Conversation restoration across a new agent instance and workspace isolation are covered by tests.
+- `uv run pytest -q tests/test_sessions.py`: 4 passed. The snapshot callback specialization depends on the locked Strands SDK version. The SQLite database is unencrypted and contains conversation and tool context; in-progress failed turns are intentionally not restored.

@@ -6,9 +6,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from strands.hooks.events import AfterInvocationEvent
+from strands.session import SnapshotSessionManager
 from strands.storage.storage import Storage
 
-from code_harness.workspace import WorkspaceError
+from code_harness.workspace import WorkspaceError, _protected
 
 
 class SQLiteStorage(Storage):
@@ -67,12 +69,30 @@ class SQLiteStorage(Storage):
         return await asyncio.to_thread(self._list, query)
 
 
+class CompletedTurnSessionManager(SnapshotSessionManager):
+    """Persist only finished turns, so restoring never resumes a pending tool call."""
+
+    async def _on_after_invocation(self, event: AfterInvocationEvent) -> None:
+        if event.result is not None and event.result.stop_reason in {"end_turn", "stop_sequence"}:
+            await super()._on_after_invocation(event)
+
+
 class Sessions:
     """Keep session selection bound to one canonical workspace."""
 
     def __init__(self, database: Path, workspace: Path):
+        root = workspace.resolve()
+        try:
+            relative = database.resolve().relative_to(root)
+        except ValueError:
+            pass
+        else:
+            if not _protected(relative.parts):
+                raise WorkspaceError(
+                    "Session database inside the workspace must be in a protected directory"
+                )
         self.storage = SQLiteStorage(database)
-        self.workspace = str(workspace.resolve())
+        self.workspace = str(root)
 
     def create(self) -> str:
         session_id = uuid.uuid4().hex
@@ -94,7 +114,7 @@ class Sessions:
         ]
 
     def manager(self, session_id: str) -> Any:
-        from strands.session import SnapshotSessionManager
-
         self.require(session_id)
-        return SnapshotSessionManager(session_id, storage=self.storage, save_latest_on="invocation")
+        return CompletedTurnSessionManager(
+            session_id, storage=self.storage, save_latest_on="invocation"
+        )
