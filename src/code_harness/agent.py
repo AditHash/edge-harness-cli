@@ -1,7 +1,6 @@
 """Compose the single Strands agent with guarded repository tools."""
 
 import json
-import os
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
@@ -22,6 +21,7 @@ from code_harness import git_tools
 from code_harness.config import Settings
 from code_harness.instructions import Guidance
 from code_harness.planning import render_plan, validate_plan
+from code_harness.platforms import sandbox_backend
 from code_harness.proposals import Proposal
 from code_harness.workspace import MAX_DISCOVERY_FILES, Workspace, WorkspaceError
 
@@ -176,7 +176,7 @@ def create_agent(
             "Never claim a file changed unless the tool reports success."
         )
 
-    if review_command is not None and os.name == "nt":
+    if review_command is not None and sandbox_backend() is not None:
         from code_harness.sandbox import execute_in_sandbox
 
         @tool(context=True)

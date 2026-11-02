@@ -5,13 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from code_harness.platforms import sandbox_backend
 from code_harness.sandbox import _snapshot, execute_in_sandbox
 from code_harness.workspace import Workspace, WorkspaceError
 
 
 def test_rejection_does_not_read_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    if os.name != "nt":
-        pytest.skip("WSL sandbox is available only on Windows")
+    if sandbox_backend() is None:
+        pytest.skip("no sandbox backend on this platform")
     workspace = Workspace(tmp_path)
     monkeypatch.setattr(workspace, "files", lambda **kwargs: pytest.fail("snapshot was read"))
     with pytest.raises(WorkspaceError, match="rejected"):
@@ -148,3 +149,22 @@ def test_real_wsl_sandbox_cancel(tmp_path: Path) -> None:
         check=False,
     )
     assert remaining.returncode == 1
+
+
+def test_unsupported_platform_has_no_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from code_harness import sandbox
+
+    monkeypatch.setattr(sandbox, "sandbox_backend", lambda: None)
+    with pytest.raises(WorkspaceError, match="No sandbox available"):
+        sandbox.execute_in_sandbox(Workspace(tmp_path), "true", lambda _: True)
+
+
+def test_macos_reports_disabled_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    from code_harness import platforms
+
+    monkeypatch.setattr(platforms.sys, "platform", "darwin")
+    monkeypatch.setattr(platforms.os, "name", "posix")
+    assert platforms.sandbox_backend() is None
+    assert "disabled" in platforms.sandbox_unavailable_reason()

@@ -17,7 +17,13 @@ from strands.hooks.registry import HookProvider, HookRegistry
 from strands.tools.mcp import MCPClient
 from strands.tools.mcp.mcp_agent_tool import MCPAgentTool
 
-from code_harness.sandbox import _snapshot, _wsl_executable
+from code_harness.platforms import (
+    helper_command,
+    sandbox_backend,
+    sandbox_unavailable_reason,
+    wsl_executable,
+)
+from code_harness.sandbox import _snapshot
 from code_harness.workspace import Workspace, WorkspaceError, _protected
 
 
@@ -75,6 +81,31 @@ class MCPApprovalGuard(HookProvider):
             event.cancel_tool = "MCP tool call was not approved"
 
 
+def _wsl_path(snapshot: Path, distro: str) -> str:
+    try:
+        conversion = subprocess.run(
+            [
+                wsl_executable(),
+                "-d",
+                distro,
+                "--exec",
+                "/usr/bin/wslpath",
+                "-a",
+                "-u",
+                str(snapshot),
+            ],
+            capture_output=True,
+            timeout=15,
+            check=True,
+        )
+        linux_path = conversion.stdout.decode("utf-8").strip()
+        if not linux_path.startswith("/") or "\n" in linux_path:
+            raise ValueError
+        return linux_path
+    except (OSError, ValueError, subprocess.SubprocessError, UnicodeError):
+        raise WorkspaceError("Cannot prepare an isolated MCP workspace in WSL") from None
+
+
 @contextlib.contextmanager
 def connect_sandboxed_mcp(
     workspace: Workspace,
@@ -84,8 +115,9 @@ def connect_sandboxed_mcp(
     distro: str = "Ubuntu",
 ) -> Iterator[tuple[list[MCPAgentTool], int]]:
     """Start one local stdio server in a no-network, copied WSL workspace."""
-    if os.name != "nt":
-        raise WorkspaceError("Sandboxed MCP currently requires Windows and WSL")
+    backend = sandbox_backend()
+    if backend is None:
+        raise WorkspaceError(f"No sandbox available: {sandbox_unavailable_reason()}")
     archive, omitted = _snapshot(workspace)
     try:
         relative = state_dir.resolve().relative_to(workspace.root)
@@ -100,42 +132,12 @@ def connect_sandboxed_mcp(
     try:
         with os.fdopen(fd, "wb") as stream:
             stream.write(archive)
-        try:
-            conversion = subprocess.run(
-                [
-                    _wsl_executable(),
-                    "-d",
-                    distro,
-                    "--exec",
-                    "/usr/bin/wslpath",
-                    "-a",
-                    "-u",
-                    str(snapshot),
-                ],
-                capture_output=True,
-                timeout=15,
-                check=True,
-            )
-            linux_path = conversion.stdout.decode("utf-8").strip()
-            if not linux_path.startswith("/") or "\n" in linux_path:
-                raise ValueError
-        except (OSError, ValueError, subprocess.SubprocessError, UnicodeError):
-            raise WorkspaceError("Cannot prepare an isolated MCP workspace in WSL") from None
+        linux_path = str(snapshot)
+        if backend == "wsl":
+            linux_path = _wsl_path(snapshot, distro)
         helper = Path(__file__).with_name("wsl_mcp_helper.py").read_text(encoding="utf-8")
-        params = StdioServerParameters(
-            command=_wsl_executable(),
-            args=[
-                "-d",
-                distro,
-                "--exec",
-                "/usr/bin/python3",
-                "-I",
-                "-c",
-                helper,
-                linux_path,
-                json.dumps(config.command),
-            ],
-        )
+        argv = helper_command(helper, distro, linux_path, json.dumps(config.command))
+        params = StdioServerParameters(command=argv[0], args=argv[1:])
         with open(os.devnull, "w", encoding="utf-8") as errors:
             transport: Any = lambda: stdio_client(params, errlog=errors)
             client = MCPClient(transport, prefix=config.name, startup_timeout=30)

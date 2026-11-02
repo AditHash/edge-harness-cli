@@ -1,7 +1,6 @@
 """Build a filtered snapshot and execute it in a WSL Bubblewrap sandbox."""
 
 import base64
-import ctypes
 import io
 import json
 import os
@@ -14,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from unicodedata import category
 
+from code_harness.platforms import helper_command, sandbox_backend, sandbox_unavailable_reason
 from code_harness.workspace import Workspace, WorkspaceError
 
 SNAPSHOT_FILES = 2000
@@ -28,19 +28,6 @@ class SandboxResult:
     reason: str
     duration_seconds: float
     omitted_files: int
-
-
-def _wsl_executable() -> str:
-    """Resolve the system WSL executable without searching the project or PATH."""
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
-    get_directory = kernel.GetSystemDirectoryW
-    get_directory.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
-    get_directory.restype = ctypes.c_uint32
-    buffer = ctypes.create_unicode_buffer(32768)
-    length = get_directory(buffer, len(buffer))
-    if not length or length >= len(buffer):
-        raise WorkspaceError("Cannot locate the Windows system directory")
-    return str(Path(buffer.value) / "wsl.exe")
 
 
 def _snapshot(workspace: Workspace) -> tuple[bytes, int]:
@@ -77,8 +64,8 @@ def execute_in_sandbox(
     cancel_signal: threading.Event | None = None,
 ) -> SandboxResult:
     """Run one approved command in a temporary network-isolated WSL sandbox."""
-    if os.name != "nt":
-        raise WorkspaceError("The Bubblewrap WSL backend currently requires Windows")
+    if sandbox_backend() is None:
+        raise WorkspaceError(f"No sandbox available: {sandbox_unavailable_reason()}")
     if not command or len(command) > 4000 or not 1 <= timeout <= 60:
         raise WorkspaceError("Command or timeout is outside the allowed limits")
     if any(category(ch).startswith("C") and ch not in "\n\t" for ch in command):
@@ -103,14 +90,14 @@ def execute_in_sandbox(
     )
     try:
         process = subprocess.Popen(
-            [_wsl_executable(), "-d", distro, "--exec", "/usr/bin/python3", "-I", "-c", helper],
+            helper_command(helper, distro),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
     except OSError:
-        raise WorkspaceError("WSL sandbox could not start; no host command was run") from None
+        raise WorkspaceError("Sandbox could not start; no host command was run") from None
     assert process.stdin is not None and process.stdout is not None and process.stderr is not None
     stdout = bytearray()
     stderr = bytearray()
@@ -150,7 +137,7 @@ def execute_in_sandbox(
         for thread in readers:
             thread.join(timeout=3)
     if process.returncode != 0:
-        raise WorkspaceError("WSL sandbox failed to initialize; no host fallback was used")
+        raise WorkspaceError("Sandbox failed to initialize; no host fallback was used")
     try:
         data = json.loads(stdout)
         return SandboxResult(
@@ -162,4 +149,4 @@ def execute_in_sandbox(
             omitted_files=omitted,
         )
     except (ValueError, TypeError, KeyError):
-        raise WorkspaceError("WSL sandbox returned an invalid response") from None
+        raise WorkspaceError("Sandbox returned an invalid response") from None
