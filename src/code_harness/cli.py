@@ -209,10 +209,16 @@ class ReviewIO:
 
 
 def _terminal_io() -> ReviewIO:
+    from code_harness.ui import review_renderable
+
+    def ask(prompt: str) -> str:
+        # The prompt text is ours, never model output.
+        return console.input(f"[bold yellow]? {escape(prompt)}[/bold yellow]")
+
     return ReviewIO(
         sys.stdin.isatty(),
-        lambda text: console.print(text, markup=False, highlight=False),
-        input,
+        lambda text: console.print(review_renderable(text)),
+        ask,
     )
 
 
