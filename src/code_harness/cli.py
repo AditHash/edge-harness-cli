@@ -4,6 +4,8 @@ import json
 import os
 import re
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -64,38 +66,56 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
     console.print()
 
 
+@dataclass(frozen=True)
+class ReviewIO:
+    """How approval prompts reach the user: terminal by default, a TUI modal otherwise."""
+
+    interactive: bool
+    display: Callable[[str], None]
+    read_reply: Callable[[str], str]
+
+
+def _terminal_io() -> ReviewIO:
+    return ReviewIO(
+        sys.stdin.isatty(),
+        lambda text: console.print(text, markup=False, highlight=False),
+        input,
+    )
+
+
 def _make_agent(
     workspace: Path,
     session_manager=None,
     guidance: list[Guidance] | None = None,
     model_id: str | None = None,
     mcp_tools: list[Any] | None = None,
+    review_io: ReviewIO | None = None,
 ) -> Any:
     from code_harness.agent import create_agent
 
+    def io() -> ReviewIO:
+        return review_io or _terminal_io()
+
     def review(proposal: Proposal) -> bool:
+        ui = io()
         return review_proposal(
-            proposal,
-            interactive=sys.stdin.isatty(),
-            display=lambda text: console.print(text, markup=False, highlight=False),
-            read_reply=input,
+            proposal, interactive=ui.interactive, display=ui.display, read_reply=ui.read_reply
         )
 
     def command_review(command: str) -> bool:
+        ui = io()
         return review_command(
-            command,
-            interactive=sys.stdin.isatty(),
-            display=lambda text: console.print(text, markup=False, highlight=False),
-            read_reply=input,
+            command, interactive=ui.interactive, display=ui.display, read_reply=ui.read_reply
         )
 
     def mcp_review(name: str, arguments: str) -> bool:
+        ui = io()
         return review_mcp(
             f"tool call {name}",
             arguments,
-            interactive=sys.stdin.isatty(),
-            display=lambda text: console.print(text, markup=False, highlight=False),
-            read_reply=input,
+            interactive=ui.interactive,
+            display=ui.display,
+            read_reply=ui.read_reply,
         )
 
     settings = Settings(workspace=workspace)
@@ -331,3 +351,36 @@ def chat(
         raise typer.Exit(1) from None
     finally:
         stack.close()
+
+
+@app.command()
+def tui(
+    workspace: Path | None = None,
+    project_instructions: bool = False,
+    skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+) -> None:
+    """Open the Textual interface (approvals appear as modal dialogs)."""
+    from code_harness.tui import HarnessApp
+
+    root = (workspace or Path.cwd()).resolve()
+    try:
+        settings = Settings(workspace=root)
+        guidance = load_guidance(
+            Workspace(root), project_instructions=project_instructions, skills=skill or []
+        )
+        sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
+        manager = sessions.manager(sessions.create())
+        tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
+
+        def make_agent(display: Callable[[str], None], read_reply: Callable[[str], str]) -> Any:
+            return _make_agent(
+                root, manager, guidance, review_io=ReviewIO(True, display, read_reply)
+            )
+
+        HarnessApp(make_agent, tracker).run()
+    except WorkspaceError as exc:
+        console.print(str(exc), markup=False)
+        raise typer.Exit(1) from None
+    except Exception as exc:  # noqa: BLE001 - do not expose provider error contents
+        console.print(f"[red]Cannot start TUI ({type(exc).__name__}); check configuration.[/red]")
+        raise typer.Exit(1) from None
