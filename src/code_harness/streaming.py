@@ -8,7 +8,7 @@ from code_harness.contracts import AgentEvent
 
 async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
-    async for event in agent.stream_async(prompt):
+    async for event in agent.stream_async(prompt, limits={"turns": 20, "output_tokens": 32768}):
         if isinstance(event.get("data"), str):
             yield AgentEvent("text_delta", event["data"])
         elif event.get("current_tool_use", {}).get("name"):

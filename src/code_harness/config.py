@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     bedrock_model_id: str | None = None
     sandbox_wsl_distribution: str = "Ubuntu"
     harness_state_dir: Path = Field(default_factory=lambda: Path.home() / ".edge-harness")
+    harness_enable_explorer: bool = False
     workspace: Path = Field(default_factory=Path.cwd)
 
     @field_validator("workspace")

@@ -97,3 +97,8 @@ This file is an **evidence log**, not a place to report intended work as complet
 
 - Enabled the installed Strands sliding-window conversation manager with a 40-message window and per-model-call checks. `/compact` explicitly removes older messages, reports how many were removed, and saves the reduced snapshot. It does not claim to summarize them.
 - `uv run pytest -q tests/test_sessions.py`: 5 passed, including restoring manually compacted context after constructing a new agent. Ruff and mypy passed after enabling the manager. Token-based summarization is not implemented.
+
+## 2026-11-02 — Optional scoped explorer
+
+- Added an opt-in `explore_repo` Strands agent-as-tool, with only the existing guarded repository read tools and a fresh context for each call. Parent request cancellation and usage limits propagate through the installed SDK's agent-as-tool implementation. The feature is off by default and may incur additional model calls.
+- `uv run pytest -q tests/test_streaming.py tests/test_agent.py`: 13 passed, 1 WSL-dependent test skipped. Tests cover actual mocked delegation through the specialist and verify a protected `.env` is not returned. Ruff and mypy passed.

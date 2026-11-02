@@ -53,6 +53,12 @@ access controls. An interrupted or failed turn is not saved as a completed turn;
 an edit already approved during that turn may still have been applied, but it
 will not be automatically replayed on resume.
 
+Set `HARNESS_ENABLE_EXPLORER=true` to expose an optional Strands exploration
+specialist. It receives only the same guarded read tools as the main agent;
+it cannot edit files or run commands. It can make additional model calls. Each
+top-level request has a 20-model-turn and 32,768-output-token soft budget shared
+with the specialist; an individual model response may overshoot a soft token limit.
+
 ## Isolated commands on Windows
 
 The command tool uses a non-root WSL distribution with `/usr/bin/python3` and

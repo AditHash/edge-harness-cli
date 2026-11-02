@@ -21,6 +21,66 @@ def test_only_guarded_tools_registered(tmp_path: Path) -> None:
     assert set(agent.tool_registry.registry) == {"list_repo", "read_code", "search_code"}
 
 
+def test_optional_explorer_has_only_guarded_read_tools(tmp_path: Path) -> None:
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    agent = create_agent(Settings(workspace=tmp_path, harness_enable_explorer=True), model=model)
+    explorer = agent.tool_registry.registry["explore_repo"]._agent
+    assert set(explorer.tool_registry.registry) == {"list_repo", "read_code", "search_code"}
+    assert "edit_code" not in explorer.tool_registry.registry
+    assert "run_sandboxed" not in explorer.tool_registry.registry
+
+
+def test_explorer_delegation_uses_same_workspace_policy(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("def needle(): pass\n")
+    (tmp_path / ".env").write_text("needle SECRET")
+    calls = 0
+    observed = []
+
+    async def model_stream(messages, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        observed.append([message.copy() for message in messages])
+        yield {"messageStart": {"role": "assistant"}}
+        if calls in (1, 2):
+            name = "explore_repo" if calls == 1 else "search_code"
+            value = {"input": "find needle"} if calls == 1 else {"query": "needle"}
+            yield {
+                "contentBlockStart": {
+                    "start": {"toolUse": {"toolUseId": f"id{calls}", "name": name}}
+                }
+            }
+            yield {"contentBlockDelta": {"delta": {"toolUse": {"input": json.dumps(value)}}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Found app.py:1"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        yield {
+            "metadata": {
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+                "metrics": {"latencyMs": 1},
+            }
+        }
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.stream.side_effect = model_stream
+    agent = create_agent(Settings(workspace=tmp_path, harness_enable_explorer=True), model=model)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "find needle")]
+
+    events = asyncio.run(run())
+    assert calls == 4
+    assert "app.py:1" in str(observed[2])
+    assert "SECRET" not in str(observed)
+    assert any("app.py:1" in event.text for event in events if event.kind == "text_delta")
+
+
 def test_explicit_model_and_region_required(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("BEDROCK_MODEL_ID", raising=False)
     monkeypatch.delenv("AWS_REGION", raising=False)

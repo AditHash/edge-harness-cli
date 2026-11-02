@@ -5,7 +5,7 @@ from code_harness.streaming import stream_turn
 
 
 class FakeAgent:
-    async def stream_async(self, prompt):
+    async def stream_async(self, prompt, **kwargs):
         yield {"data": "Hello"}
         yield {"data": " world"}
         yield {"result": object()}
@@ -22,7 +22,7 @@ def test_stream_does_not_duplicate_final_result() -> None:
 
 def test_tool_events_are_deduplicated_and_truncation_is_reported() -> None:
     class TruncatedAgent:
-        async def stream_async(self, prompt):
+        async def stream_async(self, prompt, **kwargs):
             tool = {"toolUseId": "one", "name": "read_code"}
             yield {"current_tool_use": tool}
             yield {"current_tool_use": tool}
@@ -38,7 +38,7 @@ def test_tool_events_are_deduplicated_and_truncation_is_reported() -> None:
 
 def test_tool_result_is_reported_without_exposing_tool_contents() -> None:
     class ToolAgent:
-        async def stream_async(self, prompt):
+        async def stream_async(self, prompt, **kwargs):
             yield {"current_tool_use": {"toolUseId": "one", "name": "read_code"}}
             yield {
                 "message": {
