@@ -102,3 +102,26 @@ No Deep Agents in the MVP runtime. If later needed, design a separate `CodeRevie
 ## Security
 
 `docs/SECURITY.md` controls release gating. Strands local file/shell tools execute with the host process privileges and are **not** OS isolation. Our initial tools must be custom and workspace restricted. MCP tools, retrieval indexes and secondary workflows must all share the same authorization boundary.
+
+## Implemented layout (2026-11-02)
+
+The "target" tree above is superseded by this flat layout in `src/code_harness/`:
+
+| Module | Role |
+| --- | --- |
+| `cli.py`, `tui.py` | Typer/Rich and Textual front ends; same agent, events and approval policy |
+| `agent.py` | Single composition root: `create_harness()` with guarded tools, hooks, specialists |
+| `streaming.py`, `contracts.py`, `usage.py` | Normalized `AgentEvent` stream; cumulative usage |
+| `workspace.py`, `proposals.py`, `approvals.py` | Boundary checks at the open handle, immutable diffs, typed approvals |
+| `edits.py`, `posix_edits.py` | Reviewed writes: Windows exclusive handles / POSIX pinned directory fds |
+| `platforms.py`, `sandbox.py`, `wsl_sandbox_helper.py` | Sandbox backend selection (WSL, native Linux, none) and supervisor |
+| `mcp_integration.py`, `mcp_remote.py`, `wsl_mcp_helper.py` | Local sandboxed and remote MCP + approval hook |
+| `retrieval.py` | LangChain `BaseRetriever`: chunked BM25 over the guarded workspace |
+| `git_tools.py`, `planning.py`, `instructions.py`, `sessions.py`, `config.py` | Read-only Git, plan state, explicit guidance, SQLite snapshots, settings |
+
+Decisions: LangGraph and Deep Agents are not used. The only workflow that needed more than one
+step (plan, delegate, verify) is expressed as Strands tools and agent-as-tool specialists, so a
+second orchestrator would add a competing loop without a measured benefit. LangChain is used for
+the `BaseRetriever` interface; the benchmark in `tests/test_retrieval.py` shows ranked retrieval
+finding the right file for 10/10 natural-language questions where the existing phrase search found
+0/10 (queries written by the implementer, so treat the rate as an upper bound).

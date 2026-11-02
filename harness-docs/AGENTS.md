@@ -43,3 +43,14 @@ Read `GOALS.md`, `ARCHITECTURE.md`, `docs/HYBRID_INTEGRATION.md`, `docs/SECURITY
 - Evidence, not optimistic status: `harness/build-log.md`
 
 If an example in these docs disagrees with the verified installed SDK, update the docs **and explain the reason** rather than silently improvising.
+
+## Current implementation rules (keep in sync with code)
+
+- Work only inside the repository folder the session started in.
+- Every new tool must go through `Workspace` for file access and, if it has side effects, through an
+  approval callback that fails closed in non-interactive mode. Add a test that a denial changes nothing.
+- Never add a host-shell fallback. If `platforms.sandbox_backend()` is `None`, execution stays disabled.
+- Tests that need WSL/Bubblewrap are opt-in (`HARNESS_TEST_WSL=1`); report skips as skips.
+- Run `uv run ruff format src tests`, `uv run ruff check src tests`, `uv run mypy src`, `uv run pytest -q`
+  before each commit; commit small and update `harness/build-log.md` with evidence.
+- Strands owns the loop. Do not add LangGraph/Deep Agents without a measured benefit recorded in the log.

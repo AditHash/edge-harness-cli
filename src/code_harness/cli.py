@@ -3,6 +3,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,6 +46,17 @@ def doctor() -> None:
     console.print(f"AWS profile configured: {'yes' if settings.aws_profile else 'no'}")
     console.print(
         f"AWS environment credentials present: {'yes' if os.getenv('AWS_ACCESS_KEY_ID') else 'no'}"
+    )
+    from code_harness.platforms import sandbox_backend, sandbox_unavailable_reason
+
+    backend = sandbox_backend()
+    if backend:
+        console.print(f"Command sandbox backend: {backend}")
+    else:
+        console.print(f"Command sandbox: disabled ({sandbox_unavailable_reason()})")
+    console.print(f"Git on PATH: {'yes' if shutil.which('git') else 'no'}")
+    console.print(
+        f"File edits: {'enabled' if os.name == 'nt' or hasattr(os, 'O_DIRECTORY') else 'disabled'}"
     )
     console.print("No AWS calls were made. Credentials may also be supplied by the provider chain.")
 

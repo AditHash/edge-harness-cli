@@ -78,3 +78,17 @@ Remaining risk: the sandbox shares the WSL kernel and has no aggregate cgroup qu
 and pager disabled, protected paths excluded by pathspec, and a 64 KiB output cap. A repository
 owned by another OS account is refused by Git (`safe.directory`); the tool reports failure instead
 of overriding that check.
+
+## Cross-platform notes (2026-11-02)
+
+- **Sandbox backends**: Windows uses WSL Bubblewrap; Linux uses native Bubblewrap with the same
+  supervisor script; macOS has no backend and command execution and local MCP are disabled with a
+  stated reason. There is no unsandboxed fallback.
+- **POSIX edits**: every path component is opened with `O_NOFOLLOW|O_DIRECTORY` from the workspace
+  root; targets need `O_NOFOLLOW`, regular file, link count 1 and an exclusive `flock`; deletion
+  re-checks device/inode before `unlink`. Tests cover symlinked-parent swaps and hard links.
+- **Remote MCP**: HTTPS only, no credentials/headers/query, public destinations only, same-origin
+  redirects, per-call approval. Arguments you approve leave the machine. Residual risk: DNS can change
+  between validation and connect.
+- **Retrieval** is lexical and local; it reads through `Workspace`, so protected files are unreachable.
+- **Usage/cost** figures are estimates from user-supplied prices.
