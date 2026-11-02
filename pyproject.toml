@@ -12,6 +12,7 @@ dependencies = [
     "langchain-core",
     "mcp>=2,<3",
     "textual>=8.2.8",
+    "botocore[crt]>=1.43.123",
 ]
 
 [project.scripts]

@@ -29,6 +29,11 @@ console = Console()
 @app.callback()
 def main() -> None:
     """Inspect and work with a repository using an AI assistant."""
+    # Model output may contain characters the legacy Windows code page cannot encode.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 @app.command()

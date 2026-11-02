@@ -5,8 +5,9 @@ conversation against Amazon Bedrock. Every side effect passes through a policy-c
 typed human approval. LangChain supplies a ranked-retrieval component. No second agent loop exists.
 
 Status: feature-complete against the project plan except the items under **Known limitations**.
-Live Bedrock inference has **not** been run (needs explicit authorization); see
-[docs/BEDROCK.md](harness-docs/docs/BEDROCK.md) for the bounded smoke test.
+Live Bedrock streaming, session resume, tool use and `/compact` were verified once on 2026-11-02
+(ap-south-1; see the build log). Use a capable tool-using model: a small model ignored the repo tools.
+Setup and a bounded smoke test: [Bedrock guide](harness-docs/docs/BEDROCK.md).
 
 ## Capabilities
 
@@ -27,7 +28,8 @@ Live Bedrock inference has **not** been run (needs explicit authorization); see
 
 ## Install
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). `aws login` credentials work (the
+`botocore[crt]` dependency is included).
 
 ```powershell
 uv sync --python 3.12 --dev
@@ -91,7 +93,7 @@ them. POSIX edit tests run only on Linux/macOS (see build log for how they were 
 
 ## Known limitations
 
-- Live Bedrock streaming (Scenario G) is unverified. Summarization quality is unverified.
+- Live runs did not cover approved edits/commands, MCP or the TUI with a real model. Summaries are lossy.
 - macOS command sandbox is not implemented; native Linux was exercised only through WSL's Linux.
 - The sandbox shares the host kernel (no aggregate cgroup quota); trust the distribution.
 - Retrieval is lexical BM25. Semantic embeddings would send repository text to a provider.

@@ -72,7 +72,7 @@ approval, read-only Git tools, summarizing/proactive compaction, planning, opt-i
 and test-runner specialists, cumulative usage, Textual UI, ranked LangChain retrieval (benchmarked),
 POSIX reviewed edits, native Linux sandbox backend, repository-analysis and debugging scenario tests.
 
-Not done / unverified: live Bedrock streaming and real summarization quality (Scenario G, needs
-authorization); macOS command sandbox (disabled by design); native Linux and POSIX edits verified
+Live Bedrock (Scenario G) verified for streaming, resume, tool-using analysis and compaction (build log).
+Not done / unverified: live edits/commands/MCP/TUI with a real model; macOS command sandbox (disabled by design); native Linux and POSIX edits verified
 only through WSL's Linux Python, not a separate Linux machine; semantic embeddings; sanitized
 tracing; LangGraph and Deep Agents (rejected for lack of measured benefit).

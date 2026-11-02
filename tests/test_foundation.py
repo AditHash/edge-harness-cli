@@ -26,3 +26,16 @@ def test_doctor_never_prints_credential(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test-sensitive-value")
     result = CliRunner().invoke(app, ["doctor"])
     assert "test-sensitive-value" not in result.output
+
+
+def test_cli_tolerates_unencodable_model_output(monkeypatch) -> None:
+    import io
+    import sys
+
+    from code_harness import cli
+
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", stream)
+    cli.main()
+    print("bulk ≥ 10")
+    stream.flush()
