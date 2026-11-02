@@ -14,6 +14,7 @@ PROTECTED = {
     ".azure",
     ".kube",
     ".docker",
+    ".edge-harness",
     ".npmrc",
     ".pypirc",
     ".netrc",
