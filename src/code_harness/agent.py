@@ -60,4 +60,5 @@ def create_agent(settings: Settings, model: Model | None = None) -> Any:
         background_tasks=False,
         caching=False,
         context_manager=False,
+        callback_handler=None,
     )
