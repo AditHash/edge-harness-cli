@@ -22,6 +22,17 @@ PROTECTED = {
     "id_ed25519",
 }
 SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".kdbx"}
+SKIPPED_DIRECTORIES = {
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+}
+MAX_DISCOVERY_FILES = 500
+MAX_SEARCH_RESULTS = 50
 
 
 class WorkspaceError(ValueError):
@@ -121,12 +132,14 @@ class Workspace:
         except (OSError, UnicodeError):
             raise WorkspaceError("File cannot be read as UTF-8") from None
 
-    def files(self, limit: int = 500) -> list[str]:
+    def files(self, limit: int = MAX_DISCOVERY_FILES) -> list[str]:
         results: list[str] = []
         for directory, dirs, files in os.walk(self.root, followlinks=False):
             base = Path(directory)
             safe_dirs = []
             for name in sorted(dirs):
+                if name.casefold() in SKIPPED_DIRECTORIES:
+                    continue
                 relative = (base / name).relative_to(self.root).as_posix()
                 try:
                     self.path(relative)
@@ -149,7 +162,8 @@ class Workspace:
         if not query or len(query) > 200:
             raise WorkspaceError("Search query must contain 1 to 200 characters")
         results = []
-        for path in self.files():
+        files = self.files()
+        for path in files:
             try:
                 contents = self.read(path)
             except WorkspaceError:
@@ -157,6 +171,9 @@ class Workspace:
             for number, line in enumerate(contents.splitlines(), 1):
                 if query.casefold() in line.casefold():
                     results.append(f"{path}:{number}: {line[:300]}")
-                    if len(results) >= 50:
+                    if len(results) >= MAX_SEARCH_RESULTS:
+                        results.append("[Search results truncated at 50 matches.]")
                         return results
+        if len(files) >= MAX_DISCOVERY_FILES:
+            results.append("[Search may be incomplete: file discovery reached its 500-file limit.]")
         return results

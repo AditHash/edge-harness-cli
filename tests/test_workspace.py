@@ -41,3 +41,15 @@ def test_outside_symlink_is_denied(tmp_path: Path) -> None:
     with pytest.raises(WorkspaceError):
         workspace.read("link.txt")
     assert "link.txt" not in workspace.files()
+
+
+def test_search_skips_dependency_directories_and_reports_truncation(tmp_path: Path) -> None:
+    dependency = tmp_path / "node_modules"
+    dependency.mkdir()
+    (dependency / "noise.js").write_text("needle")
+    (tmp_path / "app.py").write_text("needle\n" * 55)
+    workspace = Workspace(tmp_path)
+    assert all("node_modules" not in path for path in workspace.files())
+    results = workspace.search("needle")
+    assert len(results) == 51
+    assert results[-1] == "[Search results truncated at 50 matches.]"
