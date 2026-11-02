@@ -4,7 +4,22 @@ An in-progress terminal coding assistant. The current implementation provides a
 Strands agent backed by an explicitly configured Amazon Bedrock model, plus
 guarded repository tools. On Windows it can propose changes to existing UTF-8
 files, create new files, or delete files after interactive approval. Completed
-chat turns can be resumed from local SQLite storage. MCP is not enabled yet.
+chat turns can be resumed from local SQLite storage. 
+
+## MCP (opt-in, local stdio only)
+
+`harness chat --mcp-config server.json` (also `ask`) with
+`{"name": "fixture", "command": ["python3", "/workspace/server.py"]}`. No other fields
+(env, credentials, URLs) are accepted. Server startup and every tool call need separate typed
+approval; denied calls never reach the server. The server runs in the WSL Bubblewrap sandbox
+(copied workspace, no network, no host paths, cleared environment, bounded output/time). Remote
+MCP is not implemented. Requires Windows + WSL; other platforms refuse to start the server.
+
+## Git inspection
+
+The agent has read-only `git_status` and `git_diff` tools. They use fixed arguments, disable
+repository-configured programs (fsmonitor, external diff, textconv, hooks), exclude protected
+paths such as `.env` and keys, and cap output at 64 KiB.
 
 ## Install
 

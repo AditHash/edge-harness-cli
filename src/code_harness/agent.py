@@ -15,6 +15,7 @@ from strands.tools.mcp.mcp_agent_tool import MCPAgentTool
 from strands.types.tools import ToolContext
 from strands_harness import build_system_prompt, create_harness
 
+from code_harness import git_tools
 from code_harness.config import Settings
 from code_harness.instructions import Guidance
 from code_harness.proposals import Proposal
@@ -73,7 +74,23 @@ def create_agent(
         except WorkspaceError as exc:
             return f"Search failed: {exc}"
 
-    tools: list[Any] = [list_repo, read_code, search_code]
+    @tool
+    def git_status() -> str:
+        """Show read-only Git branch and change status for the workspace."""
+        try:
+            return git_tools.git_status(workspace)
+        except WorkspaceError as exc:
+            return f"Git unavailable: {exc}"
+
+    @tool
+    def git_diff(path: str = "", staged: bool = False) -> str:
+        """Show a read-only Git diff of unstaged (or staged) changes, optionally for one path."""
+        try:
+            return git_tools.git_diff(workspace, path or None, staged)
+        except WorkspaceError as exc:
+            return f"Git unavailable: {exc}"
+
+    tools: list[Any] = [list_repo, read_code, search_code, git_status, git_diff]
     hooks: list[Any] = []
     instructions = INSTRUCTIONS
     if guidance:

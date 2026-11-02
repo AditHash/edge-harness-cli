@@ -113,3 +113,10 @@ This file is an **evidence log**, not a place to report intended work as complet
 
 - Added `/model MODEL_ID` to switch the current chat's Bedrock model while retaining the completed session, along with `/model` to display the selection. The next inference checks account access; the switch itself does not invoke the model.
 - `uv run pytest -q tests/test_sessions.py`: 7 passed. Ruff and mypy passed. A real Bedrock model switch has not been tested because a live inference call has not been authorized.
+
+## 2026-11-02 — Sandboxed MCP and read-only Git tools
+
+- MCP: opt-in `--mcp-config` runs one local stdio server inside the WSL Bubblewrap sandbox from a filtered snapshot. A Strands `BeforeToolCallEvent` hook requires separate approval for every MCP call; startup needs approval too. Tool count (50), definition size and tool-name shape are bounded. Fixed a test typo from the handoff; one Ruff `PLW1509` suppression moved to the `preexec_fn` line (no threads exist before `Popen`).
+- `HARNESS_TEST_WSL=1 uv run pytest -q tests/test_sandbox.py tests/test_mcp_integration.py`: 11 passed. Denied call: server never reached; approved call: server reports `isolated` (no `/home`, `/mnt`, `.env`). Remote MCP is not implemented.
+- Git: `git_status` and `git_diff` tools run fixed argv with repo-config program execution disabled and protected paths excluded. `tests/test_git_tools.py` covers protected-file hiding, outside paths, non-repo failure and that malicious `core.fsmonitor`/`diff.external` do not execute.
+- Default suite: 51 passed, 8 skipped (WSL opt-in). Ruff and mypy clean. Git commands from this session needed `-c safe.directory=...` because the repository is owned by another Windows account.
