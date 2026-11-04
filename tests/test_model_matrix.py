@@ -123,3 +123,23 @@ def test_report_aggregates_runs_and_never_hides_failures() -> None:
     assert "Mostly works" in one
     assert report.index("`m.two`") < report.index("`m.one`")  # Reliable ranks first.
     assert "- `m.locked`" in report
+
+
+def test_readme_summary_replaces_only_its_section() -> None:
+    record = {
+        "model": "m.good",
+        "date": "2026-11-04",
+        "fetch": "PASS",
+        "subagent": "PASS",
+        "push": "PASS",
+        "injection": "RESISTED",
+        "reject": "PASS",
+    }
+    unsafe = {**record, "model": "m.bad", "injection": "PROPOSED"}
+    summary = matrix.render_summary([unsafe, record])
+    assert "2 models, 2 runs" in summary and "Last run 2026-11-04" in summary
+    assert summary.index("| Reliable | 1 | `m.good` |") < summary.index("| Unsafe | 1 | `m.bad` |")
+    text = f"before\n{matrix.README_START}\nold\n{matrix.README_END}\nafter\n"
+    updated = matrix.update_readme(text, "new")
+    assert updated == f"before\n{matrix.README_START}\nnew\n{matrix.README_END}\nafter\n"
+    assert matrix.update_readme(updated, "new") == updated

@@ -33,6 +33,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "harness-docs" / "docs"
 RESULTS = DOCS / "model-results.jsonl"
 REPORT = DOCS / "MODEL_PERFORMANCE.md"
+README = ROOT / "README.md"
+README_START = "<!-- model-performance:start -->"
+README_END = "<!-- model-performance:end -->"
 SCENARIOS = ("fetch", "subagent", "push", "injection", "reject")
 GOOD = {"PASS", "RESISTED"}
 REGION = "ap-south-1"
@@ -240,6 +243,33 @@ Not tested, because the account's last probe recorded no access.
 """
 
 
+def render_summary(records: list[dict[str, Any]]) -> str:
+    """The short results table kept in the README."""
+    models = summarize(records)
+    groups: dict[str, list[str]] = {}
+    for model, entry in models.items():
+        groups.setdefault(rating(entry["results"]), []).append(model)
+    rows = "\n".join(
+        f"| {name} | {len(groups[name])} | {', '.join(f'`{m}`' for m in sorted(groups[name]))} |"
+        for name in sorted(groups, key=lambda name: _ORDER.get(name, 9))
+    )
+    runs = sum(entry["runs"] for entry in models.values())
+    last = max((entry["last"] for entry in models.values()), default="never")
+    return (
+        f"Last run {last}: {len(models)} models, {runs} runs in total. Few runs per model means "
+        "these are samples, not rankings. Always read a command before approving it, whatever the "
+        "rating.\n\n"
+        f"| Rating | Models | Which |\n|---|---:|---|\n{rows}"
+    )
+
+
+def update_readme(text: str, summary: str) -> str:
+    """Replace only the marked section; everything else in the README stays as written."""
+    start = text.index(README_START) + len(README_START)
+    end = text.index(README_END, start)
+    return f"{text[:start]}\n{summary}\n{text[end:]}"
+
+
 def _force_remove(function: Any, path: str, _: Any) -> None:
     os.chmod(path, stat.S_IWRITE)
     function(path)
@@ -410,7 +440,14 @@ def load_records() -> list[dict[str, Any]]:
 
 
 def write_report(no_access: Iterable[str]) -> None:
-    REPORT.write_text(render(load_records(), no_access), encoding="utf-8", newline="\n")
+    records = load_records()
+    REPORT.write_text(render(records, no_access), encoding="utf-8", newline="\n")
+    with README.open(encoding="utf-8", newline="") as stream:
+        text = stream.read()
+    newline = "\r\n" if "\r\n" in text else "\n"
+    updated = update_readme(text.replace("\r\n", "\n"), render_summary(records))
+    with README.open("w", encoding="utf-8", newline="") as stream:
+        stream.write(updated.replace("\n", newline))
 
 
 def main() -> None:
