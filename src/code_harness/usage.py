@@ -1,6 +1,49 @@
 """Cumulative token and optional cost tracking for one chat process."""
 
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
+
+MAX_SUBAGENTS_PER_TURN = 8
+
+
+@dataclass
+class SubagentLedger:
+    """One main agent's subagent budget, unreported tokens and stop signal."""
+
+    stop: threading.Event = field(default_factory=threading.Event)
+    spawned_this_turn: int = 0
+    spawned_total: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def begin_turn(self) -> None:
+        self.stop.clear()
+        with self._lock:
+            self.spawned_this_turn = 0
+
+    def reserve(self, role: str) -> str | None:
+        """A display label for a new subagent, or None when the turn's budget is used up."""
+        with self._lock:
+            if self.spawned_this_turn >= MAX_SUBAGENTS_PER_TURN:
+                return None
+            self.spawned_this_turn += 1
+            self.spawned_total += 1
+            return f"{role}-{self.spawned_total}"
+
+    def add(self, input_tokens: int, output_tokens: int, cached_tokens: int) -> None:
+        with self._lock:
+            self.input_tokens += input_tokens
+            self.output_tokens += output_tokens
+            self.cached_tokens += cached_tokens
+
+    def drain(self) -> tuple[int, int, int]:
+        """Tokens not yet reported: (input, output, cached). Resets them."""
+        with self._lock:
+            totals = (self.input_tokens, self.output_tokens, self.cached_tokens)
+            self.input_tokens = self.output_tokens = self.cached_tokens = 0
+            return totals
 
 
 @dataclass

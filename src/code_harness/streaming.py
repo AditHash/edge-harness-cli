@@ -1,11 +1,13 @@
 """Normalize the subset of Strands events consumed by the terminal."""
 
+import threading
 from collections.abc import AsyncIterator
 from typing import Any
 
 from code_harness.contracts import AgentEvent
+from code_harness.usage import SubagentLedger
 
-SUMMARY_KEYS = ("path", "command", "question", "query", "url")
+SUMMARY_KEYS = ("path", "command", "question", "query", "url", "task")
 
 
 def tool_summary(name: str, arguments: Any) -> str:
@@ -39,11 +41,33 @@ def _model_id(agent: Any) -> str:
     return model_id if isinstance(model_id, str) else ""
 
 
-async def stream_turn(agent: Any, prompt: Any) -> AsyncIterator[AgentEvent]:
+async def stream_turn(
+    agent: Any, prompt: Any, cancel_signal: threading.Event | None = None
+) -> AsyncIterator[AgentEvent]:
+    ledger = getattr(agent, "subagents", None)
+    if not isinstance(ledger, SubagentLedger):
+        ledger = None
+    if ledger is not None:
+        ledger.begin_turn()
+    extra = {} if cancel_signal is None else {"cancel_signal": cancel_signal}
+    try:
+        async for item in _stream_events(agent, prompt, ledger, extra):
+            yield item
+    finally:
+        # Cancelling a turn must not leave subagents working (or asking for approval) behind it.
+        if ledger is not None:
+            ledger.stop.set()
+
+
+async def _stream_events(
+    agent: Any, prompt: Any, ledger: SubagentLedger | None, extra: dict[str, Any]
+) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
     manager = getattr(agent, "conversation_manager", None)
     removed_before = getattr(manager, "removed_message_count", 0)
-    async for event in agent.stream_async(prompt, limits={"turns": 20, "output_tokens": 32768}):
+    async for event in agent.stream_async(
+        prompt, limits={"turns": 20, "output_tokens": 32768}, **extra
+    ):
         if isinstance(event.get("data"), str):
             yield AgentEvent("text_delta", event["data"])
         elif event.get("reasoning") and isinstance(event.get("reasoningText"), str):
@@ -84,13 +108,15 @@ async def stream_turn(agent: Any, prompt: Any) -> AsyncIterator[AgentEvent]:
             context = getattr(result, "invocation_context", None)
             if context is not None:
                 usage = context.usage
+                extra_in, extra_out, extra_cached = ledger.drain() if ledger else (0, 0, 0)
+                total_in = int(usage.get("inputTokens", 0) or 0) + extra_in
+                total_out = int(usage.get("outputTokens", 0) or 0) + extra_out
                 yield AgentEvent(
                     "usage",
-                    f"Input tokens: {usage.get('inputTokens', 0)}; "
-                    f"output tokens: {usage.get('outputTokens', 0)}",
-                    int(usage.get("inputTokens", 0) or 0),
-                    int(usage.get("outputTokens", 0) or 0),
-                    _cached(usage),
+                    f"Input tokens: {total_in}; output tokens: {total_out}",
+                    total_in,
+                    total_out,
+                    _cached(usage) + extra_cached,
                 )
             removed_after = getattr(manager, "removed_message_count", 0)
             if (
