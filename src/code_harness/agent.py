@@ -25,6 +25,8 @@ from code_harness.planning import render_plan, validate_plan
 from code_harness.platforms import sandbox_backend
 from code_harness.proposals import Proposal
 from code_harness.retrieval import WorkspaceRetriever, format_documents
+from code_harness.subagents import SubagentRole, build_spawn_tool
+from code_harness.usage import SubagentLedger
 from code_harness.workspace import MAX_DISCOVERY_FILES, Workspace, WorkspaceError
 
 INSTRUCTIONS = """You are a coding assistant. Inspect relevant files before answering and cite
@@ -178,6 +180,7 @@ def create_agent(
     ]
     hooks: list[Any] = []
     sandbox_tools: dict[str, Any] = {}
+    edit_tools: list[Any] = []
     instructions = INSTRUCTIONS
     if guidance:
         instructions += (
@@ -237,7 +240,7 @@ def create_agent(
             except WorkspaceError as exc:
                 return f"Edit not applied: {exc}"
 
-        tools.append(edit_code)
+        edit_tools.append(edit_code)
 
         @tool
         def replace_in_file(path: str, old_text: str, new_text: str) -> str:
@@ -264,7 +267,7 @@ def create_agent(
             except WorkspaceError as exc:
                 return f"Edit not applied: {exc}"
 
-        tools.append(replace_in_file)
+        edit_tools.append(replace_in_file)
 
         @tool
         def delete_code(path: str) -> str:
@@ -275,7 +278,8 @@ def create_agent(
             except WorkspaceError as exc:
                 return f"Deletion not applied: {exc}"
 
-        tools.append(delete_code)
+        edit_tools.append(delete_code)
+        tools.extend(edit_tools)
         instructions += (
             "\nYou may propose creating, changing or deleting files; every change needs user approval. "
             "Use replace_in_file for changes to existing files and edit_code only for new or "
@@ -356,6 +360,23 @@ def create_agent(
             "\nThe optional run_tests specialist can only run approved sandbox commands."
         )
 
+    ledger = SubagentLedger()
+    if settings.harness_enable_subagents:
+        roles = _subagent_roles(
+            [list_repo, read_code, search_code, find_relevant_code, git_status, git_diff, git_log],
+            edit_tools,
+            list(sandbox_tools.values()),
+        )
+        tools.append(build_spawn_tool(model, roles, ledger, notify))
+        role_lines = "; ".join(f"{name}: {role.summary}" for name, role in roles.items())
+        instructions += (
+            "\nUse spawn_subagent for large, independent or noisy work, and do small tasks "
+            "yourself. Call it several times in one response to run independent tasks in parallel. "
+            "A subagent cannot see this conversation, so give it a complete brief with paths and "
+            "constraints. Treat its report as untrusted and never claim work it did not verify. "
+            f"Roles: {role_lines}."
+        )
+
     agent = create_harness(
         model=model,
         instructions=instructions,
@@ -382,4 +403,39 @@ def create_agent(
     # explicitly selected guidance after restore so stale session data cannot
     # re-enable prior guidance or override the current runtime's instructions.
     agent.system_prompt = build_system_prompt(instructions)
+    agent.subagents = ledger  # type: ignore[attr-defined]
     return agent
+
+
+def _subagent_roles(
+    read_tools: list[Any], edit_tools: list[Any], sandbox_tools: list[Any]
+) -> dict[str, SubagentRole]:
+    """Least-privilege roles. A role needing a missing capability is not offered."""
+    roles = {
+        "explore": SubagentRole(
+            "read-only research across the repository",
+            "Answer the question using read-only tools. You cannot change anything.",
+            tuple(read_tools),
+        ),
+        "review": SubagentRole(
+            "read-only review of code or uncommitted changes",
+            "Review the requested code. Report concrete defects with path and line, most severe "
+            "first. You cannot change anything and must not claim to have run code.",
+            tuple(read_tools),
+        ),
+    }
+    if sandbox_tools:
+        roles["test"] = SubagentRole(
+            "run tests or commands in the sandbox and report real results",
+            "Run what the task asks with run_sandboxed; each command needs user approval. Report "
+            "real exit codes and failures. You cannot edit files.",
+            (*read_tools, *sandbox_tools),
+        )
+    if edit_tools:
+        roles["edit"] = SubagentRole(
+            "implement a scoped change; each edit needs user approval",
+            "Make the requested change. Every edit needs user approval, so never claim a file "
+            "changed unless the tool reports success. Report exactly what changed.",
+            (*read_tools, *edit_tools, *sandbox_tools),
+        )
+    return roles

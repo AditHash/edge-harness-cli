@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     harness_enable_explorer: bool = False
     harness_enable_reviewer: bool = False
     harness_enable_tester: bool = False
+    harness_enable_subagents: bool = True
     input_price_per_mtok: float | None = None
     output_price_per_mtok: float | None = None
     workspace: Path = Field(default_factory=Path.cwd)

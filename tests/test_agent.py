@@ -22,6 +22,7 @@ READ_ONLY_TOOLS = {
     "git_log",
     "update_plan",
     "find_relevant_code",
+    "spawn_subagent",
 }
 
 

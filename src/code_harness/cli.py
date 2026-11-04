@@ -440,7 +440,11 @@ def _make_agent(
         guidance=guidance,
         mcp_tools=mcp_tools,
         mcp_review=mcp_review if mcp_tools else None,
-        notify=lambda text: console.print(f"[cyan]{text}[/cyan]", highlight=False),
+        # Subagent progress carries model text, so it is never parsed as markup. A TUI owns the
+        # screen, so console output there would corrupt it.
+        notify=(lambda text: None)
+        if review_io is not None
+        else lambda text: console.print(f"[cyan]{escape(text)}[/cyan]", highlight=False),
     )
 
 
