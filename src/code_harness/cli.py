@@ -5,14 +5,17 @@ import os
 import re
 import shutil
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from rich.console import Console
 from rich.markup import escape
+from rich.text import Text
 
 from code_harness.approvals import (
     SessionApprovals,
@@ -25,7 +28,16 @@ from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
-from code_harness.ui import CODE_THEME, THEME, changes_table
+from code_harness.ui import (
+    CODE_THEME,
+    THEME,
+    branch,
+    bullet_row,
+    changes_table,
+    mark,
+    short_duration,
+    user_bar,
+)
 from code_harness.usage import UsageTracker
 from code_harness.workspace import Workspace, WorkspaceError
 
@@ -183,20 +195,25 @@ class _ReplyView:
         self.text = ""
         self.live: Any = None
 
+    def _render(self) -> Any:
+        from rich.markdown import Markdown
+
+        body = Markdown(self.text.lstrip(), code_theme=CODE_THEME)
+        return bullet_row(body, mark(console.encoding), "bright_white")
+
     def add(self, delta: str) -> None:
         from rich.live import Live
-        from rich.markdown import Markdown
 
         self.text += delta
         if self.live is None:
             self.live = Live(
-                Markdown(self.text, code_theme=CODE_THEME),
+                self._render(),
                 console=console,
                 refresh_per_second=8,
             )
             self.live.start()
         else:
-            self.live.update(Markdown(self.text, code_theme=CODE_THEME))
+            self.live.update(self._render())
 
     def stop(self) -> None:
         if self.live is not None:
@@ -212,6 +229,8 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
     meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
     reply = _ReplyView()
     changes_before = len(SESSION_CHANGES)
+    started = time.monotonic()
+    turn_tokens = ""
     try:
         async for event in stream_turn(agent, prompt):
             if event.kind == "reasoning":
@@ -226,26 +245,28 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
             if event.kind == "tool_call":
                 name, _, target = event.text.partition(" ")
                 console.print(
-                    f"  [bold bright_cyan]> {escape(name)}[/bold bright_cyan] "
-                    f"[bright_white]{escape(target)}[/bright_white]".rstrip(),
-                    highlight=False,
+                    bullet_row(
+                        Text.assemble((name, "bold bright_cyan"), " ", (target, "bright_white")),
+                        mark(console.encoding),
+                        "bright_cyan",
+                    )
                 )
             elif event.kind == "tool_result":
                 if event.text.endswith(": failed"):
-                    console.print(f"[red]  x {escape(event.text)}[/red]", highlight=False)
+                    console.print(
+                        f"[red]  {branch(console.encoding)} {escape(event.text)}[/red]",
+                        highlight=False,
+                    )
             elif event.kind == "call_usage":
                 served = f"[yellow]{escape(event.text)}[/yellow]  " if event.text else ""
                 console.print(
-                    f"    {served}{_token_text(event)}",
+                    f"  [dim]{branch(console.encoding)}[/dim] {served}{_token_text(event)}",
                     highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
                     tracker.add(event.input_tokens, event.output_tokens, event.cached_tokens)
-                console.rule(
-                    f"turn: {_token_text(event)}",
-                    style="bright_black",
-                )
+                turn_tokens = _token_text(event)
             elif event.kind == "compacted":
                 console.print(f"[cyan]{escape(event.text)}[/cyan]")
             elif event.kind == "error":
@@ -255,6 +276,11 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
         meter.stop()
     if len(SESSION_CHANGES) > changes_before:
         console.print(changes_table(SESSION_CHANGES[changes_before:], "Changed this turn"))
+    worked = short_duration(time.monotonic() - started)
+    clock = datetime.now().strftime("%H:%M")
+    tail = f" [dim]-[/dim] {turn_tokens}" if turn_tokens else ""
+    console.print(f"  [dim]Worked for {worked} - {clock}[/dim]{tail}", highlight=False)
+    console.print()
 
 
 @dataclass(frozen=True)
@@ -469,6 +495,7 @@ def chat(
         session_id = resume or sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
+        from code_harness import __version__
         from code_harness.ui import session_header
 
         console.print(
@@ -477,13 +504,16 @@ def chat(
                 model=current_model or "not configured",
                 session_id=session_id,
                 guidance=[item.path for item in guidance],
+                version=__version__,
             )
         )
         while True:
             try:
-                prompt = console.input("[bold green]you >[/bold green] ").strip()
+                prompt = console.input("[bold bright_green]>[/bold bright_green] ").strip()
             except EOFError:
                 break
+            if prompt:
+                console.print(user_bar(prompt))
             if prompt in {"/exit", "/quit"}:
                 break
             if prompt == "/help":

@@ -68,13 +68,13 @@ def test_turn_display_is_compact_and_readable(monkeypatch) -> None:
     tracker = cli.UsageTracker()
     asyncio.run(cli._show_turn(object(), "x", tracker))
     text = recorder.export_text()
-    assert "> read_code README.md" in text
+    assert "* read_code README.md" in text or "● read_code README.md" in text
     assert "read_code: finished" not in text  # successes stay quiet
-    assert "x git_diff: failed" in text
-    assert "> git_diff [x]" in text  # markup in tool targets is shown literally
+    assert "git_diff: failed" in text
+    assert "git_diff [x]" in text  # markup in tool targets is shown literally
     assert "in.anthropic.claude-haiku  1,946 in / 129 out" in text
     assert "Summary" in text and "## Summary" not in text and "**one**" not in text  # Markdown
-    assert "turn: 2,000 in / 150 out" in text
+    assert "Worked for" in text and "2,000 in / 150 out" in text
     assert tracker.input_tokens == 2000
 
 

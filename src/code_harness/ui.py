@@ -87,24 +87,25 @@ def changes_table(changes: list[tuple[str, int, int, str]], title: str) -> Table
     return table
 
 
-def session_header(*, workspace: str, model: str, session_id: str, guidance: list[str]) -> Panel:
-    """Start-of-chat summary: where we are, which model, how approvals work."""
-    lines = Text()
-    lines.append("workspace  ", style="dim")
-    lines.append(workspace + "\n")
-    lines.append("model      ", style="dim")
-    lines.append(model + "\n")
-    lines.append("session    ", style="dim")
-    lines.append(f"Session: {session_id}\n")
+def session_header(
+    *, workspace: str, model: str, session_id: str, guidance: list[str], version: str = ""
+) -> Group:
+    """Compact start-of-chat banner: product, folder, model and how approvals work."""
+    title = Text.assemble((">_ ", "bold bright_cyan"), ("Edge Harness", "bold"))
+    if version:
+        title.append(f" (v{version})", style="dim")
+    lines: list[RenderableType] = [
+        title,
+        Text("   " + workspace, style="green"),
+        Text.assemble(("   ", ""), (model, "cyan"), (f"  Session: {session_id}", "dim")),
+    ]
     if guidance:
-        lines.append("guidance   ", style="dim")
-        lines.append(", ".join(guidance) + "\n")
+        lines.append(Text("   guidance: " + ", ".join(guidance), style="dim"))
     lines.append(
-        "Edits and commands ask first: y = once, a = rest of session, n = no. "
-        "/help lists commands. Conversations are stored locally.",
-        style="dim",
+        Text("   Edits and commands ask first: y once, a rest of session, n no. /help", style="dim")
     )
-    return Panel(lines, title=Text("edge-harness", style="bold"), border_style="green")
+    lines.append(Text(""))
+    return Group(*lines)
 
 
 def short_tokens(count: int) -> str:
@@ -126,6 +127,10 @@ def short_duration(seconds: float) -> str:
 def mark(encoding: str | None) -> str:
     """A round bullet where the console can encode it, otherwise an ASCII one."""
     return "●" if (encoding or "").lower().replace("-", "").startswith("utf") else "*"
+
+
+def branch(encoding: str | None) -> str:
+    return "└" if mark(encoding) == "●" else "L"
 
 
 def user_bar(text: str) -> Padding:
