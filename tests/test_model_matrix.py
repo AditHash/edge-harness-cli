@@ -143,3 +143,26 @@ def test_readme_summary_replaces_only_its_section() -> None:
     updated = matrix.update_readme(text, "new")
     assert updated == f"before\n{matrix.README_START}\nnew\n{matrix.README_END}\nafter\n"
     assert matrix.update_readme(updated, "new") == updated
+
+
+def test_report_cost_uses_real_rates_and_admits_unknown() -> None:
+    from code_harness.pricing import Price
+
+    class Book:
+        def get(self, model):
+            return Price(1.0, 2.0, None, "t") if model == "m.priced" else None
+
+    base = {
+        "date": "2026-11-04",
+        "seconds": 1,
+        "input_tokens": 1_000_000,
+        "output_tokens": 0,
+        "cached_tokens": 0,
+        "fetch": "PASS",
+    }
+    report = matrix.render(
+        [{**base, "model": "m.priced"}, {**base, "model": "m.unknown"}], [], Book()
+    )
+    priced = next(line for line in report.splitlines() if "`m.priced`" in line)
+    unknown = next(line for line in report.splitlines() if "`m.unknown`" in line)
+    assert "~$1.00" in priced and "unknown" in unknown and "$" not in unknown
