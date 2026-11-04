@@ -25,12 +25,12 @@ from code_harness.instructions import Guidance, load_guidance
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
-from code_harness.ui import changes_table
+from code_harness.ui import CODE_THEME, THEME, changes_table
 from code_harness.usage import UsageTracker
 from code_harness.workspace import Workspace, WorkspaceError
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
-console = Console()
+console = Console(theme=THEME)
 # Standing approvals granted with `all`; reset when a chat starts.
 SESSION_APPROVALS = SessionApprovals()
 # (path, added, removed, kind) for every file change approved in this chat.
@@ -186,10 +186,14 @@ class _ReplyView:
 
         self.text += delta
         if self.live is None:
-            self.live = Live(Markdown(self.text), console=console, refresh_per_second=8)
+            self.live = Live(
+                Markdown(self.text, code_theme=CODE_THEME),
+                console=console,
+                refresh_per_second=8,
+            )
             self.live.start()
         else:
-            self.live.update(Markdown(self.text))
+            self.live.update(Markdown(self.text, code_theme=CODE_THEME))
 
     def stop(self) -> None:
         if self.live is not None:

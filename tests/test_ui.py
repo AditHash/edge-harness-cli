@@ -117,3 +117,26 @@ def test_approved_changes_are_recorded_and_summarized(tmp_path, monkeypatch) -> 
     cli.SESSION_APPROVALS.reset()
     assert not captured["review"](edit)  # rejected: not recorded
     assert len(cli.SESSION_CHANGES) == 2
+
+
+def test_markdown_theme_produces_color() -> None:
+    import io
+
+    from rich.markdown import Markdown
+
+    stream = io.StringIO()
+    console = Console(
+        file=stream, theme=ui.THEME, force_terminal=True, color_system="truecolor", width=60
+    )
+    console.print(Markdown("## Title\n\n- **bold** and `code`", code_theme=ui.CODE_THEME))
+    assert "\x1b[" in stream.getvalue() and "Title" in stream.getvalue()
+
+
+def test_no_color_is_respected(monkeypatch) -> None:
+    import io
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    stream = io.StringIO()
+    console = Console(file=stream, theme=ui.THEME, force_terminal=True, width=60)
+    console.print("[red]plain[/red]")
+    assert "\x1b[31m" not in stream.getvalue()

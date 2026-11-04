@@ -9,6 +9,24 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
+from rich.theme import Theme
+
+CODE_THEME = "monokai"
+THEME = Theme(
+    {
+        "markdown.h1": "bold bright_cyan",
+        "markdown.h2": "bold bright_blue",
+        "markdown.h3": "bold bright_magenta",
+        "markdown.h4": "bold magenta",
+        "markdown.strong": "bold bright_white",
+        "markdown.em": "italic bright_yellow",
+        "markdown.code": "bright_green",
+        "markdown.item.bullet": "bright_cyan",
+        "markdown.item.number": "bright_cyan",
+        "markdown.block_quote": "italic bright_magenta",
+        "markdown.link": "bright_blue underline",
+    }
+)
 
 DIFF_PREFIX = "Proposed change: "
 COMMAND_PREFIX = "Proposed sandbox command"
