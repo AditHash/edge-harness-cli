@@ -506,6 +506,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "botocore", extra = ["crt"] },
+    { name = "certifi" },
     { name = "langchain-core" },
     { name = "mcp" },
     { name = "prompt-toolkit" },
@@ -527,6 +528,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "botocore", extras = ["crt"], specifier = ">=1.43.123" },
+    { name = "certifi", specifier = ">=2024.2.2" },
     { name = "langchain-core" },
     { name = "mcp", specifier = ">=2,<3" },
     { name = "prompt-toolkit", specifier = ">=3.0.53" },

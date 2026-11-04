@@ -77,11 +77,14 @@ def serve(monkeypatch: pytest.MonkeyPatch, responses: list[FakeResponse]) -> lis
 
 
 def test_html_becomes_text_without_scripts(monkeypatch: pytest.MonkeyPatch) -> None:
-    page = b"<html><script>evil()</script><p>Hello &amp; <b>bye</b>\x1b[2J</p></html>"
+    page = (
+        b"<html><!-- hidden --><script>evil()</script><p>Hello &amp; <b>bye</b>\x1b[2J</p></html>"
+    )
     serve(monkeypatch, [FakeResponse(200, {"Content-Type": "text/html; charset=utf-8"}, page)])
     url, text = fetch_page("https://example.com/#frag", public)
     assert url == "https://example.com/"
     assert "Hello & bye" in text and "evil" not in text and "\x1b" not in text
+    assert "hidden" not in text
 
 
 def test_redirect_to_private_address_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,6 +135,13 @@ def test_connection_uses_the_checked_address_not_a_new_lookup(
     with pytest.raises(OSError, match="stop here"):
         kind("example.com", 443, PUBLIC, 1).connect()
     assert seen == [(PUBLIC, 443)]
+
+
+def test_tls_verification_stays_on() -> None:
+    import ssl
+
+    context = web._PinnedHTTPS("example.com", 443, PUBLIC, 1).tls_context
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
 
 
 def _tools(search: bool = True, fetch: bool = True) -> tuple[Any, Any, Any]:

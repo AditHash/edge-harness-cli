@@ -20,6 +20,7 @@ from typing import Any
 from unicodedata import category
 from urllib.parse import urljoin, urlsplit
 
+import certifi
 from strands import tool
 from strands_harness.tools.web_search import make_exa_web_search
 
@@ -91,7 +92,10 @@ class _PinnedHTTP(http.client.HTTPConnection):
 
 class _PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, host: str, port: int | None, address: str, timeout: float) -> None:
+        # Windows downloads some root certificates only on demand, so Python's view of its store
+        # can miss them. certifi adds roots; verification stays fully on.
         self.tls_context = ssl.create_default_context()
+        self.tls_context.load_verify_locations(certifi.where())
         super().__init__(host, port, timeout=timeout, context=self.tls_context)
         self.pinned_address = address
 
@@ -125,6 +129,7 @@ def _to_text(data: bytes, content_type: str) -> str:
     except LookupError:
         text = data.decode("utf-8", errors="replace")
     if "html" in content_type.lower():
+        text = re.sub(r"(?s)<!--.*?-->", " ", text)
         text = re.sub(r"(?is)<(script|style|noscript)\b.*?</\1\s*>", " ", text)
         text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", text))
     text = "".join(char for char in text if char in "\n\t" or not category(char).startswith("C"))

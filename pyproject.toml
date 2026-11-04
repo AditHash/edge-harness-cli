@@ -14,6 +14,7 @@ dependencies = [
     "textual>=8.2.8",
     "botocore[crt]>=1.43.123",
     "prompt-toolkit>=3.0.53",
+    "certifi>=2024.2.2",
 ]
 
 [project.scripts]
