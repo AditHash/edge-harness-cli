@@ -48,6 +48,7 @@ Inside chat
   /mcp                  saved MCP servers and connection state
   /mcp connect <name>   connect a saved MCP server
   /cost                 estimated session cost by model
+  /settings             open the settings page
   /approve              show approvals
   /approve ask          ask every time again
   /sessions             list sessions

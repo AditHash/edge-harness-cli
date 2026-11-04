@@ -139,7 +139,8 @@ def help_table() -> Table:
     table.add_column(style="bold bright_cyan", no_wrap=True)
     table.add_column(style="dim")
     for command, description in SLASH_COMMANDS:
-        table.add_row(command, description)
+        # As Text: `[message]` in a description must not be read as a style tag.
+        table.add_row(Text(command), Text(description))
     return table
 
 
@@ -150,12 +151,12 @@ def cost_table(tracker: Any) -> RenderableType:
     if not tracker.by_model:
         return Text("No model calls in this session yet.")
     table = Table(title="Estimated session cost", title_style="bold", show_edge=False)
-    table.add_column("model", style="cyan")
+    table.add_column("model", style="cyan", overflow="fold", min_width=24)
     for column in ("in", "cached", "out"):
         table.add_column(column, justify="right")
     table.add_column("cost", justify="right", style="bold green")
-    table.add_column("$ per 1M in / cached / out", justify="right", style="dim")
-    table.add_column("price from", style="dim")
+    table.add_column("per 1M in/cached/out", justify="right", style="dim")
+    table.add_column("price from", style="dim", overflow="fold")
     for model, entry in sorted(tracker.by_model.items()):
         price = tracker.prices.get(model) if tracker.prices is not None else None
         rates = "unknown"
@@ -449,6 +450,7 @@ SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/skills", "list skills in this repo and your global folder"),
     ("/skill", "/skill <name> loads a skill into this chat"),
     ("/mcp", "saved MCP servers; /mcp connect <name> connects one"),
+    ("/settings", "open the settings page"),
     ("/approve", "show approvals"),
     ("/approve ask", "ask every time again"),
     ("/sessions", "list saved sessions"),

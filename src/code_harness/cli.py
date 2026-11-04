@@ -295,6 +295,19 @@ def _show_history(agent: Any) -> None:
     console.print()
 
 
+def _edit_settings() -> dict[str, Any] | None:
+    """Open the settings page; returns changes, or None if nothing should change."""
+    from code_harness.launcher import load_saved, state_dir
+    from code_harness.settings_page import SettingsApp, model_choices, settings_table
+
+    saved, environ = load_saved(), dict(os.environ)
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        console.print(settings_table(saved, environ))
+        console.print("Change settings with: edge-harness --set KEY=VALUE", style="dim")
+        return None
+    return SettingsApp(saved, environ, model_choices(state_dir(), saved.get("model", ""))).run()
+
+
 def _status_cost(tracker: Any) -> str:
     cost = tracker.cost
     if cost is None:
@@ -1014,6 +1027,32 @@ def chat(
             elif prompt == "/approve ask":
                 SESSION_APPROVALS.reset()
                 console.print("Standing approvals cleared. " + SESSION_APPROVALS.describe())
+            elif prompt == "/settings":
+                from code_harness import launcher
+
+                changes = _edit_settings()
+                if changes:
+                    try:
+                        launcher.change_settings(changes)
+                        launcher.resolve_model(launcher.apply_to_environment(launcher.load_saved()))
+                        updated = Settings(workspace=workspace)
+                        replacement = _make_agent(
+                            workspace, manager, guidance, updated.bedrock_model_id, mcp_tools
+                        )
+                    except (Exception, typer.Exit) as exc:  # noqa: BLE001 - may hold provider text
+                        console.print(
+                            f"[red]Settings saved, but the chat could not use them "
+                            f"({type(exc).__name__}). Restart to apply.[/red]"
+                        )
+                    else:
+                        settings = updated
+                        agent = replacement
+                        current_model = updated.bedrock_model_id
+                        tracker.prices = _price_book(settings)
+                        tracker.budget_usd = settings.harness_session_budget_usd
+                        console.print("Settings saved and applied.")
+                elif changes is not None:
+                    console.print("No settings changed.")
             elif prompt == "/usage":
                 console.print(tracker.summary(), markup=False)
             elif prompt == "/cost":
