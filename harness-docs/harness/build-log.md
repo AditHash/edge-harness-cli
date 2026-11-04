@@ -186,3 +186,15 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Display (Rich, no new dependency): diff and command panels with +/- counts, Markdown replies via `Live`, `> tool target` lines, red failures, dim per-call usage with the serving model, a turn rule with totals, a "Changed this turn" table and `/changes`, header panel, styled prompt. Panels avoid non-cp1252 glyphs after a crash on a legacy console.
 - Tests: 128 passed, 14 skipped; Ruff and mypy clean. Live (Haiku 4.5 via auto, India): header, Markdown reply, tool lines, per-call usage and turn rule rendered; found and fixed reply/usage sharing a line when output is piped. The interactive approval prompt was not exercised live (needs a TTY); its rendering and recording are covered by tests.
 - Security: the AWS account id was redacted from build-log history before the first push (local `filter-branch`; nothing had been pushed). Push to github.com/AditHash/edge-harness-cli was refused: `gh` is logged in as `adeywm`, which has no push permission (403).
+
+## 2026-11-04 - Sessions, images, skills, MCP registry, git_log
+
+- edge-harness exposes `--skill`, `--project-instructions`, `--mcp-config`; `--tui --resume` now works (it was silently ignored).
+- Sessions: metadata (title, last used, turns), `/sessions` table, unique-prefix ids, `--continue`. Older sessions stay listed without a title.
+- MCP: user-level `mcp-servers.json`, `--mcp-add/--mcp-remove/--mcp-list`, `--mcp NAME` (repeatable), `/mcp`, `/mcp connect NAME`.
+- Skills: global folder, discovery, `/skills`, `/skill NAME`.
+- Images: `/image` with header validation; `RoutedModel` sends image conversations only to Claude and Kimi K3.
+- `git_log` tool; sandbox copy keeps real modification times.
+- Tests: default 199 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 208 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
+- Live (ap-south-1): a real red PNG answered `Red` on Kimi K3 and Haiku 4.5, and both recalled it on a second turn; auto with text-only Qwen first skipped it and answered via Kimi K3. `--continue` recalled a code word from the previous process. A skill loaded by flag and by `/skill` reached the system prompt; the model followed it in 2 of 3 runs each way. A saved MCP server with piped stdin was refused at the approval step. `git_log` listed real commits on a repo owned by this user; on a repo owned by another account Git refuses (`safe.directory`). The sandbox reported the real mtime.
+- Not exercised live: `/mcp connect` and `--mcp` with human approval at a terminal, `--tui --resume`, GIF/WebP/JPEG uploads, and large images.

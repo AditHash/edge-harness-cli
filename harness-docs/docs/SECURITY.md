@@ -101,3 +101,16 @@ files, stale-diff and control-character checks) and its diff is still displayed;
 skipped. It is reset when a chat starts and by `/approve ask`, is never granted when stdin is not a
 terminal, and never covers MCP calls. Commands under a standing approval still run only in the
 sandbox. Model and repository text is rendered without Rich markup so it cannot fake prompts.
+
+## Images, global skills and saved MCP servers (2026-11-04)
+
+- **Images:** `/image` is typed by the user and has no tool form, so the model cannot request a
+  file this way. The path may be outside the workspace, but the file must be a regular file (no
+  link) with a PNG, JPEG, GIF or WebP header, at most 3.75 MB; other content is refused and never
+  sent. Images are stored unencrypted in the session database.
+- **Global skills:** read from `<state>/skills` through the same `Workspace` checks. Skill text is
+  labelled untrusted guidance and cannot grant tools or bypass approvals.
+- **Saved MCP servers:** stored only in `<state>/mcp-servers.json`, and only when the user runs
+  `--mcp-add`; repository files cannot add one. Fields are re-validated on every load, credential
+  fields are refused, and every connection and tool call still needs approval.
+- **Session titles** hold the first 60 characters of the first message, control characters removed.
