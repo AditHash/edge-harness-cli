@@ -69,6 +69,10 @@ CONTEXT_ESTIMATES: dict[str, int] = {
 EXCLUDED = re.compile(r"embed|safeguard|voxtral|claude-3-")
 
 
+# Claude models and Kimi K3 (AWS model card: "Input: Text and Image").
+VISION_MARKERS = ("anthropic.claude-", "moonshotai.kimi-k3")
+
+
 @dataclass(frozen=True)
 class CatalogModel:
     model_id: str
@@ -82,6 +86,11 @@ class CatalogModel:
 def _provider(model_id: str) -> str:
     parts = model_id.split(".")
     return parts[1] if parts[0] in {"in", "apac", "global"} and len(parts) > 2 else parts[0]
+
+
+def supports_images(model_id: str) -> bool:
+    """Models documented to accept images; anything else is treated as text-only."""
+    return any(marker in model_id for marker in VISION_MARKERS)
 
 
 def sdk_context(model_id: str) -> int | None:

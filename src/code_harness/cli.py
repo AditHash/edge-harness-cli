@@ -89,6 +89,11 @@ def _context_report(agent: Any, settings: Settings) -> str:
 def _failure_message(exc: BaseException) -> str:
     """Actionable text without provider error contents."""
     name = type(exc).__name__
+    if name == "NoVisionModelError":
+        return (
+            "Turn failed: no model in the auto route can read images. Use /new to start without "
+            "the image, or /model with a vision model such as in.moonshotai.kimi-k3."
+        )
     if name == "MaxTokensReachedException":
         return (
             "Turn stopped: the model hit its output limit (BEDROCK_MAX_TOKENS). Nothing was "

@@ -163,3 +163,48 @@ def test_first_pick_and_switches_are_announced_once() -> None:
     routed.dropped.add("a")
     _collect(routed)
     assert notes[-1] == "Auto routing: using b" and len(notes) == 2
+
+
+def test_images_only_go_to_models_that_can_read_them() -> None:
+    from code_harness.catalog import supports_images
+    from code_harness.routing import NoVisionModelError
+
+    assert supports_images("in.moonshotai.kimi-k3")
+    assert supports_images("in.anthropic.claude-haiku-4-5-20251001-v1:0")
+    assert not supports_images("qwen.qwen3-coder-480b-a35b-v1:0")
+    messages = [{"role": "user", "content": [{"image": {"format": "png"}}, {"text": "see"}]}]
+    text_model, vision_model = FakeModel("qwen"), FakeModel("kimi")
+    routed = RoutedModel(
+        [
+            ("qwen.qwen3-coder-480b-a35b-v1:0", text_model, 500),
+            ("in.moonshotai.kimi-k3", vision_model, 400),
+        ]
+    )
+
+    async def run(model: RoutedModel, history: list) -> list:
+        return [event async for event in model.stream(history)]
+
+    asyncio.run(run(routed, messages))
+    assert text_model.calls == 0 and vision_model.calls == 1
+    asyncio.run(run(routed, [{"role": "user", "content": [{"text": "plain"}]}]))
+    assert text_model.calls == 1  # text-only turns keep the normal order
+
+    only_text = RoutedModel([("qwen.qwen3-coder-480b-a35b-v1:0", FakeModel("q"), 500)])
+    with pytest.raises(NoVisionModelError):
+        asyncio.run(run(only_text, messages))
+
+
+def test_failed_vision_model_reports_its_real_error() -> None:
+    messages = [{"role": "user", "content": [{"image": {"format": "png"}}]}]
+    routed = RoutedModel(
+        [
+            ("in.moonshotai.kimi-k3", FakeModel("k", Denied()), 400),
+            ("qwen.qwen3-coder-480b-a35b-v1:0", FakeModel("q"), 500),
+        ]
+    )
+
+    async def run() -> list:
+        return [event async for event in routed.stream(messages)]
+
+    with pytest.raises(Denied):
+        asyncio.run(run())

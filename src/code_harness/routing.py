@@ -17,6 +17,9 @@ from pydantic import BaseModel
 from strands.models import Model
 from strands.types.exceptions import ContextWindowOverflowException, ModelThrottledException
 
+from code_harness.catalog import supports_images
+from code_harness.images import has_image
+
 T = TypeVar("T", bound=BaseModel)
 
 COOLDOWN_SECONDS = 120
@@ -58,6 +61,10 @@ def classify(exc: BaseException) -> str | None:
     ):
         return "drop"
     return None
+
+
+class NoVisionModelError(RuntimeError):
+    """The conversation holds an image and no available route candidate can read it."""
 
 
 class RoutedModel(Model):
@@ -103,10 +110,16 @@ class RoutedModel(Model):
         self, messages: Any, tool_specs: Any = None, system_prompt: Any = None, **kwargs: Any
     ) -> AsyncIterable[Any]:
         minimum = 0
+        needs_vision = has_image(messages)
         tried: set[str] = set()
         last_error: BaseException | None = None
         while True:
             pool = [item for item in self._available(minimum) if item[0] not in tried]
+            if needs_vision:
+                readable = [item for item in pool if supports_images(item[0])]
+                if not readable and not last_error:
+                    raise NoVisionModelError("No routed model can read images")
+                pool = readable
             if not pool:
                 if last_error is not None:
                     raise last_error
