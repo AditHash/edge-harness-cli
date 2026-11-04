@@ -196,3 +196,61 @@ def test_status_segments_show_context_left_and_tokens() -> None:
     )
     assert ("fg:ansired", "Context 5% left") in low
     assert "cached" not in "".join(part for _, part in low)
+
+
+def test_status_uses_live_model_and_context(tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from code_harness import cli
+    from code_harness.config import Settings
+    from code_harness.usage import UsageTracker
+
+    tracker = UsageTracker()
+    tracker.add(1000, 50, 200)
+    agent = SimpleNamespace(
+        model=SimpleNamespace(
+            context_window_limit=1_000,
+            get_config=lambda: {"model_id": "in.moonshotai.kimi-k3"},
+        ),
+        event_loop_metrics=SimpleNamespace(latest_context_size=100),
+    )
+    text = "".join(
+        part for _, part in cli._status(agent, Settings(workspace=tmp_path), "auto", tracker)
+    )
+    assert "auto: in.moonshotai.kimi-k3" in text
+    assert tmp_path.name in text
+    assert "Context 90% left" in text and "1.0K in" in text and "200 cached" in text
+
+
+def test_piped_input_reads_lines_without_prompt_toolkit(monkeypatch) -> None:
+    import io
+    import sys
+
+    from code_harness import cli
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO("  hello  \n"))
+    assert cli._read_prompt(list) == "hello"
+
+
+def test_terminal_prompt_reads_input_and_renders_status(monkeypatch) -> None:
+    import sys
+
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    from code_harness import cli
+
+    monkeypatch.setattr(cli, "_prompt_session", None)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True, raising=False)
+    asked: list[int] = []
+
+    def status() -> list[tuple[str, str]]:
+        asked.append(1)
+        return [("fg:ansicyan", "model")]
+
+    with create_pipe_input() as pipe, create_app_session(input=pipe, output=DummyOutput()):
+        pipe.send_text("  hello world \r")
+        assert cli._read_prompt(status) == "hello world"
+    assert asked  # the status bar was rendered

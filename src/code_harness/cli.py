@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -186,6 +187,57 @@ def _token_text(event: Any) -> str:
         f"[bright_blue]{event.input_tokens:,} in[/bright_blue]{cached} / "
         f"[bright_green]{event.output_tokens:,} out[/bright_green]"
     )
+
+
+def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any) -> list[Any]:
+    """Live values for the bottom status bar."""
+    from code_harness.ui import status_segments
+
+    model = getattr(agent, "model", None)
+    limit = getattr(model, "context_window_limit", None)
+    used = getattr(getattr(agent, "event_loop_metrics", None), "latest_context_size", None)
+    try:
+        active = model.get_config().get("model_id")  # type: ignore[union-attr]
+    except Exception:  # noqa: BLE001 - display only
+        active = None
+    name = active if isinstance(active, str) and active else configured or "no model"
+    if configured == "auto":
+        name = f"auto: {name}"
+    approvals = "ask"
+    if SESSION_APPROVALS.edits or SESSION_APPROVALS.commands:
+        approvals = "approve-all"
+    return status_segments(
+        model=name,
+        folder=settings.workspace.name or str(settings.workspace),
+        approvals=approvals,
+        context_used=used if isinstance(used, int) else None,
+        context_limit=limit if isinstance(limit, int) else None,
+        input_tokens=tracker.input_tokens,
+        cached_tokens=tracker.cached_tokens,
+        output_tokens=tracker.output_tokens,
+    )
+
+
+_prompt_session: Any = None
+
+
+def _read_prompt(status: Callable[[], list[Any]]) -> str:
+    """Input box with a live status bar at a terminal; plain line reading otherwise."""
+    global _prompt_session
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return input().strip()
+    from prompt_toolkit import PromptSession
+
+    from code_harness.ui import prompt_style
+
+    if _prompt_session is None:
+        _prompt_session = PromptSession(style=prompt_style(), erase_when_done=True)
+    reply = _prompt_session.prompt(
+        [("fg:ansibrightgreen bold", "> ")],
+        bottom_toolbar=status,
+        placeholder=[("class:placeholder", "Ask Edge Harness to do anything")],
+    )
+    return reply.strip()
 
 
 class _ReplyView:
@@ -509,7 +561,7 @@ def chat(
         )
         while True:
             try:
-                prompt = console.input("[bold bright_green]>[/bold bright_green] ").strip()
+                prompt = _read_prompt(partial(_status, agent, settings, current_model, tracker))
             except EOFError:
                 break
             if prompt:

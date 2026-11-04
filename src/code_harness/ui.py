@@ -4,6 +4,8 @@ All model- or repository-supplied text is rendered as plain text (no markup), so
 inject styles or fake prompts.
 """
 
+from typing import Any
+
 from rich.console import Group, RenderableType
 from rich.padding import Padding
 from rich.panel import Panel
@@ -182,3 +184,15 @@ def status_segments(
             segments.append(separator)
         segments.append(part)
     return segments
+
+
+def prompt_style() -> Any:
+    from prompt_toolkit.styles import Style
+
+    return Style.from_dict(
+        {
+            "bottom-toolbar": "noreverse bg:default",
+            "bottom-toolbar.text": "noreverse",
+            "placeholder": "fg:ansibrightblack",
+        }
+    )
