@@ -50,6 +50,7 @@ Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_s
 | `SANDBOX_WSL_DISTRIBUTION` | `Ubuntu` | WSL distro (Windows) |
 | `HARNESS_STATE_DIR` | `~/.edge-harness` | Sessions database and MCP scratch |
 | `HARNESS_ENABLE_SUBAGENTS` | `true` | The `spawn_subagent` tool (extra model calls, counted in `/usage`) |
+| `HARNESS_ENABLE_HOST_COMMANDS` | `true` | The `run_on_host` tool; each command needs a typed `yes` |
 | `HARNESS_ENABLE_WEB` | `true` | The `web_fetch` tool; each fetch needs approval |
 | `HARNESS_SUBAGENT_MAX_PARALLEL` | `8` | Subagents running at once (1-32); others wait for a slot |
 | `HARNESS_SUBAGENT_TURN_TOKENS` | `2000000` | Uncached subagent tokens per turn before new spawns are refused; `0` for no cap |

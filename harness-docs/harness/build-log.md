@@ -224,3 +224,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 
 - Removed `web_search` and Exa at the user's request; `web_fetch` stays. The model is told it cannot search and should only fetch URLs that are given, found in pages or the repository, or that it is confident exist.
 - Tests: default 247 passed, 14 skipped in 32.76s; `HARNESS_TEST_WSL=1`: 256 passed, 5 skipped in 89.61s (0:01:29). Ruff and mypy clean.
+
+## 2026-11-04 - Commands on the real machine
+
+- Added `run_on_host`: a typed `yes` per command, never a standing approval, refused without a terminal, not given to subagents.
+- Tests: default 271 passed, 14 skipped in 36.80s; `HARNESS_TEST_WSL=1`: 280 passed, 5 skipped in 60.38s (0:01:00). Ruff and mypy clean.
+- Live (ap-south-1, Kimi K3, scratch repo, approvals answered by a script): a commit and push reached a local bare remote; a rejected `del README.md` left the file in place; one injected instruction in `notes.md` was reported, not proposed (one run, not proof). With piped stdin the installed command refused. Not exercised: the prompt at a real terminal, a push to GitHub, and POSIX or `--tui` runs.

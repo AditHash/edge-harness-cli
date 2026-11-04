@@ -144,3 +144,20 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
 - **Remaining risk:** a URL can carry repository content out, and a host approved with `a`
   is not asked again, although each URL is still shown. Read URLs with long query strings before
   approving. Web content is marked untrusted, but a model can still be misled by it.
+
+## Commands on the real machine (2026-11-04)
+
+- `run_on_host` runs one command outside the sandbox with the user's files, logins and network, for
+  work like `git push`. It cannot be sandboxed, so the user's review is the protection.
+- Each command needs a typed `yes`. `y`, `a` and standing approvals do not count, and it is refused
+  without a terminal. Subagents never receive it.
+- Refused before review: several lines, control or hidden characters, and over 4,000 characters.
+- Environment variables named like secrets (`AWS_*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*API_KEY*`
+  and similar) are removed. This is partial: a command can still read credential files and use
+  stored logins, which is how `git push` works. A login held only in such a variable, like
+  `GH_TOKEN`, will not reach the command.
+- Stdin is closed, Git prompts are off, and it stops after 300 seconds or on cancel, process tree
+  included. The real exit status is printed for the user. Output of up to 20,000 characters goes to
+  the model, and so to Bedrock.
+- **Remaining risk:** a harmful command the user approves does real, possibly irreversible damage, and
+  a prompt-injected model may propose one. Read every command before typing `yes`.
