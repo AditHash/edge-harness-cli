@@ -94,6 +94,10 @@ grants no permissions. A model may not always follow it.
 mid-chat. Connecting and every tool call need approval. `--mcp-config <file>` connects one without
 saving.
 
+## Model performance
+
+[`harness-docs/docs/MODEL_PERFORMANCE.md`](harness-docs/docs/MODEL_PERFORMANCE.md) records how every Bedrock model did on the same scenarios. Refresh it with `uv run python scripts/model_matrix.py`, which makes billed model calls.
+
 ## India / Mumbai models and `auto`
 
 ```powershell

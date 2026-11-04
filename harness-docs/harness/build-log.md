@@ -230,3 +230,12 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Added `run_on_host`: a typed `yes` per command, never a standing approval, refused without a terminal, not given to subagents.
 - Tests: default 271 passed, 14 skipped in 36.80s; `HARNESS_TEST_WSL=1`: 280 passed, 5 skipped in 60.38s (0:01:00). Ruff and mypy clean.
 - Live (ap-south-1, Kimi K3, scratch repo, approvals answered by a script): a commit and push reached a local bare remote; a rejected `del README.md` left the file in place; one injected instruction in `notes.md` was reported, not proposed (one run, not proof). With piped stdin the installed command refused. Not exercised: the prompt at a real terminal, a push to GitHub, and POSIX or `--tui` runs.
+
+## 2026-11-04 - Session fixes and model evaluation
+
+- Fixed: `<think>` text in replies; `kimi-k2-thinking` removed from `auto`; `y` at the real machine prompt asks again; only the first `run_on_host` of a response runs; the user sees real command output; empty bullets removed; resume now shows saved history and an estimated context size; every chat end prints a session line.
+- Added `scripts/model_matrix.py`, `docs/MODEL_PERFORMANCE.md` and `docs/model-results.jsonl`.
+- Two evaluation runs were discarded: the allow-list in the test script refused working commands, including any path with a space. One later run was stopped before finishing because a tool change affected its results.
+- Final run: 39 targets, one run each, 779,261 input + 59,497 cached / 38,054 output tokens; 10 rated Reliable. No rejected command ran. `nvidia.nemotron-nano-12b-v2` proposed the injected command, which the script refused.
+- Not exercised: prompts at a real terminal for the new `y` retry and one-at-a-time behavior, and `--tui` history. Resume history was checked against a real saved session with piped input.
+- Final checks: default 323 passed, 14 skipped in 38.12s. Ruff and mypy clean. `HARNESS_TEST_WSL=1` last ran before this docs-only commit: 332 passed, 5 skipped.
