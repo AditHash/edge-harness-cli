@@ -168,3 +168,15 @@ def test_macos_reports_disabled_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(platforms.os, "name", "posix")
     assert platforms.sandbox_backend() is None
     assert "disabled" in platforms.sandbox_unavailable_reason()
+
+
+def test_snapshot_keeps_real_modification_times(tmp_path: Path) -> None:
+    import io
+    import tarfile
+
+    target = tmp_path / "app.py"
+    target.write_text("print(1)\n")
+    os.utime(target, (1_700_000_000, 1_700_000_000))
+    archive, _ = _snapshot(Workspace(tmp_path))
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        assert tar.getmember("app.py").mtime == 1_700_000_000

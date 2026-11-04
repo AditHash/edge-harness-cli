@@ -1,6 +1,7 @@
 """Build a filtered snapshot and execute it in a WSL Bubblewrap sandbox."""
 
 import base64
+import contextlib
 import io
 import json
 import os
@@ -50,6 +51,8 @@ def _snapshot(workspace: Workspace) -> tuple[bytes, int]:
             entry = tarfile.TarInfo(name)
             entry.size = len(data)
             entry.mode = 0o600
+            with contextlib.suppress(OSError):
+                entry.mtime = int(os.stat(workspace.path(name)).st_mtime)
             tar.addfile(entry, io.BytesIO(data))
     return result.getvalue(), omitted
 
