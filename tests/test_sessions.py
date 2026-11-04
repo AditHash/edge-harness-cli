@@ -375,6 +375,7 @@ def test_chat_end_prints_the_session_id_to_resume(tmp_path: Path, monkeypatch) -
     empty = runner.invoke(cli.app, arguments, input="/exit\n")
     assert empty.exit_code == 0, empty.output
     assert "--resume" not in empty.output  # Nothing was said, so nothing to resume.
+    assert re.search(r"Session [0-9a-f]{32} had no messages", empty.output)
 
     used = runner.invoke(cli.app, arguments, input="hello\n/exit\n")
     assert used.exit_code == 0, used.output
@@ -385,3 +386,97 @@ def test_chat_end_prints_the_session_id_to_resume(tmp_path: Path, monkeypatch) -
     again = runner.invoke(cli.app, [*arguments, "--resume", match.group(1)], input="more\n")
     assert again.exit_code == 0, again.output
     assert f"--resume {match.group(1)}" in again.output
+
+
+def test_ctrl_c_and_crash_still_print_the_session_line(tmp_path: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from code_harness import cli
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("COLUMNS", "200")
+    fake = type("Fake", (), {"messages": [{"role": "user", "content": [{"text": "hi"}]}]})()
+    monkeypatch.setattr(cli, "_make_agent", lambda *a, **k: fake)
+
+    for error in (KeyboardInterrupt, RuntimeError):
+
+        def interrupted(status, error=error):
+            raise error
+
+        monkeypatch.setattr(cli, "_read_prompt", interrupted)
+        result = CliRunner().invoke(cli.app, ["chat", "--workspace", str(workspace)])
+        # Messages exist although no turn finished, so the session can be resumed.
+        assert re.search(r"edge-harness --resume [0-9a-f]{32}", result.output), result.output
+
+
+def _messages() -> list[dict]:
+    return [
+        {"role": "user", "content": [{"text": "first question"}]},
+        {
+            "role": "assistant",
+            "content": [
+                {"reasoningContent": {"reasoningText": {"text": "private"}}},
+                {"text": "<think>hidden</think>Checking."},
+                {"toolUse": {"toolUseId": "1", "name": "read_code", "input": {"path": "a.py"}}},
+            ],
+        },
+        {
+            "role": "user",
+            "content": [{"toolResult": {"toolUseId": "1", "content": [{"text": "x"}]}}],
+        },
+        {"role": "assistant", "content": [{"text": "**Done**\x1b[2J"}]},
+        {"role": "user", "content": [{"image": {"format": "png", "source": {"bytes": b"1"}}}]},
+    ]
+
+
+def test_history_rows_show_the_conversation_only() -> None:
+    from code_harness.ui import history_items
+
+    items, hidden = history_items(_messages())
+    assert hidden == 0
+    assert items == [
+        ("user", "first question"),
+        ("assistant", "Checking."),
+        ("tool", "read_code a.py"),
+        ("assistant", "**Done**[2J"),
+        ("user", "[image]"),
+    ]
+    assert history_items(_messages(), limit=2) == (items[-2:], 3)
+    assert history_items(None) == ([], 0)
+
+
+def test_context_estimate_counts_text_but_not_images() -> None:
+    from code_harness.ui import estimated_context_tokens
+
+    text = [{"role": "user", "content": [{"text": "x" * 4000}]}]
+    assert 1000 <= estimated_context_tokens(text) < 1100
+    image = [{"role": "user", "content": [{"image": {"source": {"bytes": b"y" * 9000}}}]}]
+    assert estimated_context_tokens(image) == 0
+    assert estimated_context_tokens(None) == 0
+
+
+def test_resume_replays_history_on_screen(tmp_path: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from code_harness import cli
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("COLUMNS", "200")
+    fake = type("Fake", (), {"messages": _messages()})()
+    monkeypatch.setattr(cli, "_make_agent", lambda *a, **k: fake)
+    arguments = ["chat", "--workspace", str(workspace)]
+
+    fresh = CliRunner().invoke(cli.app, arguments, input="/exit\n")
+    assert "Earlier in this session" not in fresh.output
+    session_id = re.search(r"--resume ([0-9a-f]{32})", fresh.output).group(1)
+
+    resumed = CliRunner().invoke(cli.app, [*arguments, "--resume", session_id], input="/exit\n")
+    assert resumed.exit_code == 0, resumed.output
+    assert "Earlier in this session" in resumed.output
+    assert "first question" in resumed.output and "read_code a.py" in resumed.output
+    assert "hidden" not in resumed.output and "private" not in resumed.output
+    assert "\x1b[2J" not in resumed.output

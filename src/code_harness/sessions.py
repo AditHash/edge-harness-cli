@@ -125,10 +125,10 @@ class Sessions:
         except (ValueError, TypeError, AttributeError):
             return SessionInfo(session_id, "", 0.0, 0)
 
-    def resume_hint(self, session_id: str) -> str | None:
-        """The exact command to continue this session; None if it holds nothing to resume."""
-        if not self._load_info(session_id).turns:
-            return None
+    def resume_hint(self, session_id: str, has_messages: bool = False) -> str:
+        """The line shown when a chat ends, with the exact command to continue it if possible."""
+        if not (has_messages or self._load_info(session_id).turns):
+            return f"Session {session_id} had no messages, so there is nothing to resume."
         return (
             f"Session saved. Resume with: edge-harness --resume {session_id} "
             "(or --continue for the latest)"

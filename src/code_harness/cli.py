@@ -37,6 +37,8 @@ from code_harness.ui import (
     branch,
     bullet_row,
     changes_table,
+    estimated_context_tokens,
+    history_items,
     mark,
     short_duration,
     user_bar,
@@ -204,6 +206,9 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
     model = getattr(agent, "model", None)
     limit = getattr(model, "context_window_limit", None)
     used = getattr(getattr(agent, "event_loop_metrics", None), "latest_context_size", None)
+    if not used:
+        # Nothing measured yet, as in a resumed chat before its first message.
+        used = estimated_context_tokens(getattr(agent, "messages", None))
     try:
         active = model.get_config().get("model_id")  # type: ignore[union-attr]
     except Exception:  # noqa: BLE001 - display only
@@ -224,6 +229,29 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
         cached_tokens=tracker.cached_tokens,
         output_tokens=tracker.output_tokens,
     )
+
+
+def _show_history(agent: Any) -> None:
+    """Replay the saved conversation, so a resumed chat does not look empty."""
+    from rich.markdown import Markdown
+
+    items, hidden = history_items(getattr(agent, "messages", None))
+    if not items:
+        return
+    console.print("[dim]Earlier in this session[/dim]")
+    if hidden:
+        console.print(f"[dim]({hidden} earlier rows not shown)[/dim]")
+    for kind, text in items:
+        if kind == "user":
+            console.print(user_bar(text))
+        elif kind == "assistant":
+            body = Markdown(text, code_theme=CODE_THEME)
+            console.print(bullet_row(body, mark(console.encoding), "bright_white"))
+        else:
+            row = Text(text, style="bright_cyan")
+            console.print(bullet_row(row, mark(console.encoding), "bright_cyan"))
+    console.print("[dim]Continue below; the model can see this conversation.[/dim]")
+    console.print()
 
 
 _prompt_session: Any = None
@@ -634,6 +662,7 @@ def chat(
     workspace = workspace or Path.cwd()
     stack = contextlib.ExitStack()
     show_resume_hint: Callable[[], None] | None = None
+    agent: Any = None
     try:
         settings = Settings(workspace=workspace)
         current_model = settings.bedrock_model_id
@@ -649,10 +678,11 @@ def chat(
         session_id = sessions.resolve(resume) if resume else sessions.create()
 
         def resume_hint() -> None:
-            # Reads session_id when the chat ends, so /new and /resume are reflected.
-            hint = sessions.resume_hint(session_id)
-            if hint:
-                console.print(hint, markup=False, highlight=False)
+            # Reads these when the chat ends, so /new and /resume are reflected. Messages count as
+            # well as finished turns, so a turn cut short can still be resumed.
+            has_messages = bool(getattr(agent, "messages", None))
+            hint = sessions.resume_hint(session_id, has_messages)
+            console.print(hint, markup=False, highlight=False)
 
         show_resume_hint = resume_hint
         manager = sessions.manager(session_id)
@@ -669,6 +699,8 @@ def chat(
                 version=__version__,
             )
         )
+        if resume:
+            _show_history(agent)
         while True:
             try:
                 prompt = _read_prompt(partial(_status, agent, settings, current_model, tracker))
@@ -713,6 +745,7 @@ def chat(
                     manager = candidate_manager
                     session_id = candidate
                     console.print(f"Resumed session {session_id}.")
+                    _show_history(agent)
             elif prompt == "/compact":
                 try:
                     before = len(agent.messages)
@@ -875,9 +908,7 @@ def tui(
         HarnessApp(
             make_agent, tracker, on_turn=lambda text: sessions.record_turn(session_id, text)
         ).run()
-        hint = sessions.resume_hint(session_id)
-        if hint:
-            console.print(hint, markup=False, highlight=False)
+        console.print(sessions.resume_hint(session_id), markup=False, highlight=False)
     except WorkspaceError as exc:
         console.print(str(exc), markup=False)
         raise typer.Exit(1) from None

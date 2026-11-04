@@ -15,6 +15,7 @@ from rich.text import Text
 from rich.theme import Theme
 
 from code_harness.approvals import HOST_PREFIX
+from code_harness.streaming import ThinkFilter, tool_summary
 
 CODE_THEME = "monokai"
 THEME = Theme(
@@ -62,6 +63,9 @@ def command_panel(command: str) -> Panel:
     )
     title = Text.assemble(("$ ", "bold cyan"), ("sandbox command", "bold"))
     return Panel(body, title=title, border_style="cyan", expand=True)
+
+
+HISTORY_LIMIT = 20
 
 
 def review_renderable(text: str) -> RenderableType:
@@ -141,6 +145,49 @@ def mark(encoding: str | None) -> str:
 
 def branch(encoding: str | None) -> str:
     return "└" if mark(encoding) == "●" else "L"
+
+
+def _printable(text: str) -> str:
+    return "".join(char for char in text if char in "\n\t" or char.isprintable())
+
+
+def history_items(messages: Any, limit: int = HISTORY_LIMIT) -> tuple[list[tuple[str, str]], int]:
+    """The saved conversation as (kind, text) rows, kind being user, assistant or tool.
+
+    Returns the latest `limit` rows and how many earlier ones were left out. Tool results and
+    reasoning are not replayed. All of this text is untrusted, so it is shown literally.
+    """
+    items: list[tuple[str, str]] = []
+    for message in messages if isinstance(messages, list) else []:
+        role = "user" if message.get("role") == "user" else "assistant"
+        for block in message.get("content", []):
+            if "text" in block:
+                text = str(block["text"])
+                if role == "assistant":
+                    think = ThinkFilter()
+                    parts = [*think.feed(text), *think.finish_message()]
+                    text = "".join(part for kind, part in parts if kind == "text_delta")
+                if text.strip():
+                    items.append((role, _printable(text).strip()))
+            elif "image" in block:
+                items.append((role, "[image]"))
+            elif "toolUse" in block:
+                use = block["toolUse"]
+                items.append(("tool", tool_summary(str(use.get("name")), use.get("input"))))
+    return items[-limit:], max(0, len(items) - limit)
+
+
+def estimated_context_tokens(messages: Any) -> int:
+    """Rough size of a restored conversation (~4 characters per token), images left out."""
+    if not isinstance(messages, list):
+        return 0
+    size = sum(
+        len(str(block))
+        for message in messages
+        for block in message.get("content", [])
+        if "image" not in block
+    )
+    return size // 4
 
 
 def user_bar(text: str) -> Padding:

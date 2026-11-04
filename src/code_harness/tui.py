@@ -15,6 +15,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, Label, RichLog, Static
 
 from code_harness.streaming import stream_turn
+from code_harness.ui import history_items
 from code_harness.usage import UsageTracker
 
 
@@ -67,6 +68,16 @@ class HarnessApp(App[None]):
         self._shown: list[str] = []
         self.agent = make_agent(self._collect_review, self._approval_reply)
         self._busy = False
+
+    def on_mount(self) -> None:
+        items, hidden = history_items(getattr(self.agent, "messages", None))
+        if items:
+            self.log_line(
+                "Earlier in this session" + (f" ({hidden} rows not shown)" if hidden else "")
+            )
+        labels = {"user": "You > ", "assistant": "", "tool": "Tool: "}
+        for kind, text in items:
+            self.log_line(labels[kind] + text)
 
     def compose(self) -> ComposeResult:
         yield Header()
