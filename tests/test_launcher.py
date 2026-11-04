@@ -171,3 +171,24 @@ def test_auto_without_capable_model_stops(monkeypatch: pytest.MonkeyPatch) -> No
 def test_invalid_residency_refused() -> None:
     result = CliRunner().invoke(launcher.launcher, ["--residency", "usa", "--show-config"])
     assert result.exit_code != 0
+
+
+def test_manual_prints_without_config_or_aws(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: pytest.fail("aws"))
+    result = CliRunner().invoke(launcher.launcher, ["--manual"])
+    assert result.exit_code == 0 and "/changes" in result.output
+    assert not launcher.settings_path().exists()
+
+
+def test_manual_only_lists_commands_that_exist() -> None:
+    import re
+
+    from code_harness import cli
+    from code_harness.manual import MANUAL
+
+    help_text = CliRunner().invoke(launcher.launcher, ["--help"], env={"COLUMNS": "200"}).output
+    for flag in set(re.findall(r"edge-harness (--[a-z-]+)", MANUAL)):
+        assert flag in help_text, flag
+    source = Path(cli.__file__).read_text(encoding="utf-8")
+    for command in set(re.findall(r"^  (/[a-z]+(?: ask)?)", MANUAL, flags=re.MULTILINE)):
+        assert f'"{command}"' in source or f'"{command} "' in source, command

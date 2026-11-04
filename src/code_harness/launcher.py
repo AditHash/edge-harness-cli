@@ -220,6 +220,7 @@ def main(
     tui: Annotated[bool, typer.Option("--tui", help="Open the Textual interface")] = False,
     show_config: Annotated[bool, typer.Option("--show-config", help="Print settings")] = False,
     no_login: Annotated[bool, typer.Option("--no-login", help="Skip the credential check")] = False,
+    manual: Annotated[bool, typer.Option("--manual", help="Print the command manual")] = False,
     residency: Annotated[
         str | None,
         typer.Option(help="Save: india (in.* only), mumbai (ap-south-1 only) or any"),
@@ -233,6 +234,11 @@ def main(
     ] = 0,
 ) -> None:
     """Chat about the current folder. Region/model/profile options are remembered."""
+    if manual:
+        from code_harness.manual import MANUAL
+
+        console.print(MANUAL, markup=False, highlight=False)
+        return
     updates = {
         key: value
         for key, value in (
