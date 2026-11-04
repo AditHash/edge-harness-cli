@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -351,3 +352,36 @@ def test_older_sessions_without_metadata_stay_listed(tmp_path: Path) -> None:
     sessions.storage._write(f"session/{old}/scopes/agent/coding-agent/snapshot.json", b"{}")
     assert [info.session_id for info in sessions.details()] == [old]
     assert sessions.latest() is None
+
+
+def test_chat_end_prints_the_session_id_to_resume(tmp_path: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from code_harness import cli
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("COLUMNS", "200")
+    monkeypatch.setattr(cli, "_make_agent", lambda *a, **k: object())
+
+    async def no_model_call(*args, **kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(cli, "_show_turn", no_model_call)
+    runner = CliRunner()
+    arguments = ["chat", "--workspace", str(workspace)]
+
+    empty = runner.invoke(cli.app, arguments, input="/exit\n")
+    assert empty.exit_code == 0, empty.output
+    assert "--resume" not in empty.output  # Nothing was said, so nothing to resume.
+
+    used = runner.invoke(cli.app, arguments, input="hello\n/exit\n")
+    assert used.exit_code == 0, used.output
+    match = re.search(r"edge-harness --resume ([0-9a-f]{32})", used.output)
+    assert match, used.output
+
+    # EOF ends the chat too, and the printed id really resumes that session.
+    again = runner.invoke(cli.app, [*arguments, "--resume", match.group(1)], input="more\n")
+    assert again.exit_code == 0, again.output
+    assert f"--resume {match.group(1)}" in again.output

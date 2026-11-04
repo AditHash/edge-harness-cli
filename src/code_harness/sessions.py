@@ -125,6 +125,15 @@ class Sessions:
         except (ValueError, TypeError, AttributeError):
             return SessionInfo(session_id, "", 0.0, 0)
 
+    def resume_hint(self, session_id: str) -> str | None:
+        """The exact command to continue this session; None if it holds nothing to resume."""
+        if not self._load_info(session_id).turns:
+            return None
+        return (
+            f"Session saved. Resume with: edge-harness --resume {session_id} "
+            "(or --continue for the latest)"
+        )
+
     def record_turn(self, session_id: str, prompt: str) -> None:
         """Note a finished turn; the first prompt becomes the session's title."""
         info = self._load_info(session_id)

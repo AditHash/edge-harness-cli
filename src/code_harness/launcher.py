@@ -240,7 +240,9 @@ def main(
     region: Annotated[str | None, typer.Option(help="Save and use this AWS region")] = None,
     model: Annotated[str | None, typer.Option(help="Save and use this Bedrock model id")] = None,
     profile: Annotated[str | None, typer.Option(help="Save and use this AWS profile")] = None,
-    resume: Annotated[str | None, typer.Option(help="Resume a session id")] = None,
+    resume: Annotated[
+        str | None, typer.Option(help="Resume a session by id; --continue resumes the latest")
+    ] = None,
     tui: Annotated[bool, typer.Option("--tui", help="Open the Textual interface")] = False,
     show_config: Annotated[bool, typer.Option("--show-config", help="Print settings")] = False,
     no_login: Annotated[bool, typer.Option("--no-login", help="Skip the credential check")] = False,

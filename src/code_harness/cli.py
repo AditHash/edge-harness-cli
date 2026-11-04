@@ -631,6 +631,7 @@ def chat(
     """Start an interactive conversation; edits require approval."""
     workspace = workspace or Path.cwd()
     stack = contextlib.ExitStack()
+    show_resume_hint: Callable[[], None] | None = None
     try:
         settings = Settings(workspace=workspace)
         current_model = settings.bedrock_model_id
@@ -644,6 +645,14 @@ def chat(
         SESSION_APPROVALS.reset()
         SESSION_CHANGES.clear()
         session_id = sessions.resolve(resume) if resume else sessions.create()
+
+        def resume_hint() -> None:
+            # Reads session_id when the chat ends, so /new and /resume are reflected.
+            hint = sessions.resume_hint(session_id)
+            if hint:
+                console.print(hint, markup=False, highlight=False)
+
+        show_resume_hint = resume_hint
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
         from code_harness import __version__
@@ -832,6 +841,8 @@ def chat(
         console.print(f"[red]Cannot start agent ({type(exc).__name__}); check configuration.[/red]")
         raise typer.Exit(1) from None
     finally:
+        if show_resume_hint is not None:
+            show_resume_hint()
         stack.close()
 
 
@@ -862,6 +873,9 @@ def tui(
         HarnessApp(
             make_agent, tracker, on_turn=lambda text: sessions.record_turn(session_id, text)
         ).run()
+        hint = sessions.resume_hint(session_id)
+        if hint:
+            console.print(hint, markup=False, highlight=False)
     except WorkspaceError as exc:
         console.print(str(exc), markup=False)
         raise typer.Exit(1) from None
