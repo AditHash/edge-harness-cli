@@ -192,3 +192,65 @@ def test_manual_only_lists_commands_that_exist() -> None:
     source = Path(cli.__file__).read_text(encoding="utf-8")
     for command in set(re.findall(r"^  (/[a-z]+(?: ask)?)", MANUAL, flags=re.MULTILINE)):
         assert f'"{command}"' in source or f'"{command} "' in source, command
+
+
+def test_guidance_and_mcp_options_reach_chat(
+    monkeypatch: pytest.MonkeyPatch, isolated: Path
+) -> None:
+    from code_harness import cli
+
+    launcher.save({"region": "ap-south-1", "model": "m1"})
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
+    started: dict = {}
+    monkeypatch.setattr(cli, "chat", lambda **k: started.update(k))
+    config = isolated / "server.json"
+    result = CliRunner().invoke(
+        launcher.launcher,
+        ["--skill", "a", "--skill", "b", "--project-instructions", "--mcp-config", str(config)],
+    )
+    assert result.exit_code == 0, result.output
+    assert started["skill"] == ["a", "b"]
+    assert started["project_instructions"] is True
+    assert started["mcp_config"] == config
+
+
+def test_tui_receives_resume_and_refuses_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
+    from code_harness import cli
+
+    launcher.save({"region": "ap-south-1", "model": "m1"})
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
+    started: dict = {}
+    monkeypatch.setattr(cli, "tui", lambda **k: started.update(k))
+    result = CliRunner().invoke(launcher.launcher, ["--tui", "--resume", "abc", "--skill", "s"])
+    assert result.exit_code == 0, result.output
+    assert started["resume"] == "abc" and started["skill"] == ["s"]
+    refused = CliRunner().invoke(launcher.launcher, ["--tui", "--mcp-config", "x.json"])
+    assert refused.exit_code == 1 and "chat" in refused.output
+
+
+def test_tui_resume_uses_that_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from code_harness import cli, tui
+    from code_harness.sessions import Sessions
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    state = tmp_path / "state"
+    monkeypatch.setenv("HARNESS_STATE_DIR", str(state))
+    session_id = Sessions(state / "sessions.sqlite", workspace).create()
+    used: list[str] = []
+
+    class FakeApp:
+        def __init__(self, make_agent, tracker):
+            make_agent(print, input)
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(tui, "HarnessApp", FakeApp)
+    monkeypatch.setattr(
+        cli,
+        "_make_agent",
+        lambda root, manager, guidance, review_io=None: used.append(manager.session_id),
+    )
+    cli.tui(workspace=workspace, project_instructions=False, skill=None, resume=session_id)
+    assert used == [session_id]

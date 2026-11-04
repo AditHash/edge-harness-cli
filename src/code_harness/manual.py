@@ -7,6 +7,9 @@ Start
   edge-harness                                  chat in the current folder
   edge-harness --tui                            Textual interface
   edge-harness --resume <session-id>            continue a saved session
+  edge-harness --skill <name>                   load .agents/skills/<name>/SKILL.md (repeatable)
+  edge-harness --project-instructions           load AGENTS.md as guidance
+  edge-harness --mcp-config <file.json>         connect the MCP server in this file (chat only)
 
 Model
   edge-harness --model auto                     route per request, with failover (saved)

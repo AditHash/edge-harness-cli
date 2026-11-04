@@ -685,6 +685,7 @@ def tui(
     workspace: Path | None = None,
     project_instructions: bool = False,
     skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
+    resume: str | None = None,
 ) -> None:
     """Open the Textual interface (approvals appear as modal dialogs)."""
     from code_harness.tui import HarnessApp
@@ -696,7 +697,7 @@ def tui(
             Workspace(root), project_instructions=project_instructions, skills=skill or []
         )
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
-        manager = sessions.manager(sessions.create())
+        manager = sessions.manager(resume or sessions.create())
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
 
         def make_agent(display: Callable[[str], None], read_reply: Callable[[str], str]) -> Any:

@@ -233,6 +233,16 @@ def main(
         int,
         typer.Option(help="Check tool support of N untested models (N small billed calls)"),
     ] = 0,
+    skill: Annotated[
+        list[str] | None,
+        typer.Option("--skill", help="Load .agents/skills/NAME/SKILL.md (repeatable)"),
+    ] = None,
+    project_instructions: Annotated[
+        bool, typer.Option("--project-instructions", help="Load AGENTS.md as guidance")
+    ] = False,
+    mcp_config: Annotated[
+        Path | None, typer.Option(help="Connect the MCP server in this JSON file")
+    ] = None,
 ) -> None:
     """Chat about the current folder. Region/model/profile options are remembered."""
     if manual:
@@ -284,15 +294,23 @@ def main(
 
     if tui:
         cli.main()
-        cli.tui(workspace=Path.cwd(), project_instructions=False, skill=None)
+        if mcp_config is not None:
+            console.print("--mcp-config works only in chat, not with --tui.")
+            raise typer.Exit(1)
+        cli.tui(
+            workspace=Path.cwd(),
+            project_instructions=project_instructions,
+            skill=skill,
+            resume=resume,
+        )
     else:
         cli.main()
         cli.chat(
             workspace=Path.cwd(),
             resume=resume,
-            project_instructions=False,
-            skill=None,
-            mcp_config=None,
+            project_instructions=project_instructions,
+            skill=skill,
+            mcp_config=mcp_config,
         )
 
 
