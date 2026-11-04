@@ -101,7 +101,7 @@ def _run_subagent(
                 report.clear()
                 notify(f"  {label}: {event.text}")
             elif event.kind == "call_usage":
-                ledger.add(event.input_tokens, event.output_tokens, event.cached_tokens)
+                ledger.add(event.input_tokens, event.output_tokens, event.cached_tokens, event.text)
                 totals[0] += event.input_tokens
                 totals[1] += event.output_tokens
                 totals[2] += event.cached_tokens

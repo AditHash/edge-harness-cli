@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     harness_subagent_turn_tokens: int = Field(default=2_000_000, ge=0)
     input_price_per_mtok: float | None = None
     output_price_per_mtok: float | None = None
+    cached_price_per_mtok: float | None = None
+    harness_session_budget_usd: float | None = Field(default=None, gt=0)
     workspace: Path = Field(default_factory=Path.cwd)
 
     @field_validator("workspace")

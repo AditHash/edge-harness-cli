@@ -88,6 +88,7 @@ class SessionInfo:
     title: str
     updated: float
     turns: int
+    usage: dict | None = None
 
 
 class Sessions:
@@ -121,6 +122,7 @@ class Sessions:
                 str(data.get("title", "")),
                 float(data.get("updated", 0)),
                 int(data.get("turns", 0)),
+                data.get("usage") if isinstance(data.get("usage"), dict) else None,
             )
         except (ValueError, TypeError, AttributeError):
             return SessionInfo(session_id, "", 0.0, 0)
@@ -139,7 +141,26 @@ class Sessions:
         info = self._load_info(session_id)
         clean = " ".join("".join(ch if ch.isprintable() else " " for ch in prompt).split())
         title = info.title or clean[:MAX_TITLE_CHARS]
-        record = {"title": title, "updated": time.time(), "turns": info.turns + 1}
+        record = {
+            "title": title,
+            "updated": time.time(),
+            "turns": info.turns + 1,
+            "usage": info.usage,
+        }
+        self.storage._write(f"meta/{session_id}", json.dumps(record).encode("utf-8"))
+
+    def info(self, session_id: str) -> SessionInfo:
+        return self._load_info(session_id)
+
+    def record_usage(self, session_id: str, usage: dict) -> None:
+        """Save a session's tokens and estimated cost, keeping its other details."""
+        info = self._load_info(session_id)
+        record = {
+            "title": info.title,
+            "updated": info.updated or time.time(),
+            "turns": info.turns,
+            "usage": usage,
+        }
         self.storage._write(f"meta/{session_id}", json.dumps(record).encode("utf-8"))
 
     def details(self, include: str | None = None) -> list[SessionInfo]:
