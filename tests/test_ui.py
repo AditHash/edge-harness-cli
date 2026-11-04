@@ -140,3 +140,59 @@ def test_no_color_is_respected(monkeypatch) -> None:
     console = Console(file=stream, theme=ui.THEME, force_terminal=True, width=60)
     console.print("[red]plain[/red]")
     assert "\x1b[31m" not in stream.getvalue()
+
+
+def test_short_formats() -> None:
+    assert ui.short_tokens(14) == "14"
+    assert ui.short_tokens(17_500) == "17.5K"
+    assert ui.short_tokens(1_500_000) == "1.5M"
+    assert ui.short_duration(8.2) == "8s"
+    assert ui.short_duration(81) == "1m 21s"
+
+
+def test_mark_falls_back_on_legacy_encodings() -> None:
+    assert ui.mark("utf-8") == "●"
+    assert ui.mark("cp1252") == "*"
+    assert ui.mark(None) == "*"
+
+
+def test_user_bar_and_bullet_row_render_literal_text() -> None:
+    assert "> [red]hi[/red]" in _render(ui.user_bar("[red]hi[/red]"))
+    wide = _render(ui.bullet_row("word " * 40, "*", "white")).splitlines()
+    assert wide[0].startswith("* word") and wide[1].startswith("  word")
+
+
+def test_status_segments_show_context_left_and_tokens() -> None:
+    segments = ui.status_segments(
+        model="in.moonshotai.kimi-k3",
+        folder="v2v",
+        approvals="ask",
+        context_used=20_000,
+        context_limit=1_000_000,
+        input_tokens=30_700,
+        cached_tokens=2_000,
+        output_tokens=14,
+    )
+    text = "".join(part for _, part in segments)
+    for expected in (
+        "in.moonshotai.kimi-k3",
+        "v2v",
+        "Context 98% left",
+        "20.0K / 1.0M",
+        "30.7K in",
+        "2.0K cached",
+        "14 out",
+    ):
+        assert expected in text
+    low = ui.status_segments(
+        model="m",
+        folder="f",
+        approvals="ask",
+        context_used=95,
+        context_limit=100,
+        input_tokens=0,
+        cached_tokens=0,
+        output_tokens=0,
+    )
+    assert ("fg:ansired", "Context 5% left") in low
+    assert "cached" not in "".join(part for _, part in low)
