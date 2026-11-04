@@ -16,7 +16,7 @@ def test_only_explicit_yes_approves_and_diff_is_shown(tmp_path: Path) -> None:
     )
     assert proposal.diff in shown[0]
     assert not review_proposal(
-        proposal, interactive=True, display=shown.append, read_reply=lambda _: "y"
+        proposal, interactive=True, display=shown.append, read_reply=lambda _: ""
     )
     assert not review_proposal(
         proposal, interactive=False, display=shown.append, read_reply=lambda _: "yes"
@@ -56,7 +56,7 @@ def test_all_grants_session_approval_for_edits_only(tmp_path: Path) -> None:
         proposal, interactive=True, display=shown.append, read_reply=reply, session=session
     )
     assert session.edits and not session.commands
-    assert "all to approve every change" in asked[0]
+    assert asked[0] == "Apply to app.py? [y]es / [a]ll this session / [n]o: "
     # Later edits: diff still shown, no question asked.
     assert review_proposal(
         proposal,
@@ -123,3 +123,35 @@ def test_chat_approve_command_reports_and_clears(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 0, result.output
     assert "File changes: ask each time" in result.output  # reset when the chat started
     assert "Standing approvals cleared" in result.output
+
+
+@pytest.mark.parametrize(
+    ("reply", "approved", "standing"),
+    [
+        ("y", True, False),
+        ("YES", True, False),
+        ("a", True, True),
+        (" all ", True, True),
+        ("n", False, False),
+        ("", False, False),
+        ("yep", False, False),
+        ("[y]", False, False),
+    ],
+)
+def test_reply_parsing(tmp_path: Path, reply: str, approved: bool, standing: bool) -> None:
+    from code_harness.approvals import SessionApprovals
+
+    (tmp_path / "app.py").write_text("old\n")
+    proposal = propose(Workspace(tmp_path), "app.py", "new\n")
+    session = SessionApprovals()
+    assert (
+        review_proposal(
+            proposal,
+            interactive=True,
+            display=lambda _: None,
+            read_reply=lambda _: reply,
+            session=session,
+        )
+        is approved
+    )
+    assert session.edits is standing

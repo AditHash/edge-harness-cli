@@ -39,8 +39,9 @@ class SessionApprovals:
 
 
 def _decide(reply: str) -> str:
+    """y/yes approves once and a/all for the session; anything else, even empty, rejects."""
     answer = reply.strip().casefold()
-    return answer if answer in {"yes", "all"} else "no"
+    return {"y": "yes", "yes": "yes", "a": "all", "all": "all"}.get(answer, "no")
 
 
 def review_proposal(
@@ -64,10 +65,8 @@ def review_proposal(
         if session is not None and session.edits:
             display("Applied under your session approval (/approve ask to stop).")
             return True
-        prompt = "Apply this exact change? Type yes to approve"
-        if session is not None:
-            prompt += ", all to approve every change this session"
-        decision = _decide(read_reply(prompt + ": "))
+        choices = "[y]es / [a]ll this session / [n]o" if session is not None else "[y]es / [n]o"
+        decision = _decide(read_reply(f"Apply to {proposal.path}? {choices}: "))
         if decision == "all" and session is not None:
             session.edits = True
             return True
@@ -95,10 +94,8 @@ def review_command(
         if session is not None and session.commands:
             display("Run under your session approval (/approve ask to stop).")
             return True
-        prompt = "Run this exact command? Type yes to approve"
-        if session is not None:
-            prompt += ", all to approve every command this session"
-        decision = _decide(read_reply(prompt + ": "))
+        choices = "[y]es / [a]ll this session / [n]o" if session is not None else "[y]es / [n]o"
+        decision = _decide(read_reply(f"Run this command? {choices}: "))
         if decision == "all" and session is not None:
             session.commands = True
             return True
