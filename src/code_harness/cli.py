@@ -274,6 +274,8 @@ class _ReplyView:
         from rich.live import Live
 
         self.text += delta
+        if self.live is None and not self.text.strip():
+            return  # Blank text alone must not draw an empty bullet.
         if self.live is None:
             self.live = Live(
                 self._render(),

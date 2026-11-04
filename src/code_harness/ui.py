@@ -108,7 +108,11 @@ def session_header(
     if guidance:
         lines.append(Text("   guidance: " + ", ".join(guidance), style="dim"))
     lines.append(
-        Text("   Edits and commands ask first: y once, a rest of session, n no. /help", style="dim")
+        Text(
+            "   Edits and sandbox commands ask first: y once, a rest of session, n no. "
+            "Real machine commands need the word yes. /help",
+            style="dim",
+        )
     )
     lines.append(Text(""))
     return Group(*lines)
