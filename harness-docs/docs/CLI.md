@@ -49,6 +49,7 @@ Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_s
 | `BEDROCK_MAX_TOKENS` | `16384` | Output cap per model call (256-65536) |
 | `SANDBOX_WSL_DISTRIBUTION` | `Ubuntu` | WSL distro (Windows) |
 | `HARNESS_STATE_DIR` | `~/.edge-harness` | Sessions database and MCP scratch |
+| `HARNESS_ENABLE_SUBAGENTS` | `true` | The `spawn_subagent` tool (extra model calls, counted in `/usage`) |
 | `HARNESS_ENABLE_EXPLORER/REVIEWER/TESTER` | `false` | Opt-in specialists (extra model calls) |
 | `HARNESS_COMPACT_THRESHOLD` | `0.7` | Auto-compact when input passes this share of the window |
 | `HARNESS_RESIDENCY` | `any` | `auto` route scope: india, mumbai, any |

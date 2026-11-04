@@ -114,3 +114,15 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   `--mcp-add`; repository files cannot add one. Fields are re-validated on every load, credential
   fields are refused, and every connection and tool call still needs approval.
 - **Session titles** hold the first 60 characters of the first message, control characters removed.
+
+## Subagents (2026-11-04)
+
+- `spawn_subagent` builds a fresh agent per call with no parent conversation and least-privilege
+  tools: `explore` and `review` are read-only, `test` adds the sandbox, `edit` adds edits and the
+  sandbox. A role whose capability is unavailable is not offered.
+- Subagents never get `spawn_subagent` (depth one) or MCP tools, because the MCP approval guard is a
+  hook on the main agent. No subagent has network or host command access.
+- Edits and commands use the main agent's guarded tools and its approval lock, so a subagent cannot
+  skip an approval. `approve-all` covers them exactly as it covers the main agent.
+- Limits: 3 at once, 8 per turn, the same turn and output limits as the main agent, and a 20,000
+  character report. Provider errors are reduced to the exception type. Reports are marked untrusted.

@@ -198,3 +198,10 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Tests: default 199 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 208 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
 - Live (ap-south-1): a real red PNG answered `Red` on Kimi K3 and Haiku 4.5, and both recalled it on a second turn; auto with text-only Qwen first skipped it and answered via Kimi K3. `--continue` recalled a code word from the previous process. A skill loaded by flag and by `/skill` reached the system prompt; the model followed it in 2 of 3 runs each way. A saved MCP server with piped stdin was refused at the approval step. `git_log` listed real commits on a repo owned by this user; on a repo owned by another account Git refuses (`safe.directory`). The sandbox reported the real mtime.
 - Not exercised live: `/mcp connect` and `--mcp` with human approval at a terminal, `--tui --resume`, GIF/WebP/JPEG uploads, and large images.
+
+## 2026-11-04 - Subagents
+
+- Added `spawn_subagent` (on by default) with `explore`, `review`, `test` and `edit` roles. Subagent tokens roll into the turn's usage and `/usage`; progress lines show each subagent's tools.
+- Tests: default 213 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 222 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
+- Live (ap-south-1): Kimi K3 and Haiku 4.5 each ran two `explore` subagents in one response and combined the reports. An `edit` subagent with piped stdin was refused at approval and the file stayed unchanged. Asked for a broad audit of a two-file repo, Kimi K3 did the work itself and spawned nothing.
+- Not exercised live: approving a subagent's edit at a terminal, `test` role commands, Ctrl-C during a running subagent (the stop signal is covered by unit tests only), `--tui`.
