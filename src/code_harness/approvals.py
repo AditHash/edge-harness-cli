@@ -9,6 +9,7 @@ from code_harness.proposals import Proposal
 from code_harness.workspace import WorkspaceError
 
 HOST_PREFIX = "Proposed command on your REAL machine:"
+MAX_HOST_PROMPTS = 3
 
 
 def validate_reviewable(proposal: Proposal) -> None:
@@ -158,7 +159,17 @@ def review_host(
             "NOT sandboxed: it runs with your files, logins and network, and the model reads its "
             "output. Check it did not come from repository or web content."
         )
-        return read_reply("Run on your REAL machine? Type yes: ").strip().casefold() == "yes"
+        # A slip like `y` asks again instead of silently rejecting; it never approves.
+        for _ in range(MAX_HOST_PROMPTS):
+            reply = read_reply("Run on your REAL machine? Type yes, or no to reject: ")
+            answer = reply.strip().casefold()
+            if answer == "yes":
+                return True
+            if answer in {"", "n", "no"}:
+                break
+            display("Not approved yet: type the full word yes, or no to reject.")
+        display("Rejected. The command did not run.")
+        return False
     except (EOFError, KeyboardInterrupt, OSError):
         return False
 

@@ -47,7 +47,7 @@ def test_approved_command_runs_in_the_real_workspace(tmp_path: Path) -> None:
     review.assert_called_once_with(command)
     assert (tmp_path / "made.txt").read_text() == "x"
     assert "exit code 0" in result and "hello" in result
-    assert notes == ["run_on_host: exit code 0"]
+    assert notes == ["run_on_host: exit code 0\n  hello"]  # The user sees the real result.
 
 
 def test_rejected_command_never_runs(tmp_path: Path) -> None:
@@ -209,3 +209,57 @@ def test_real_git_commit_and_push_to_local_remote(tmp_path: Path) -> None:
         check=True,
     )
     assert log.stdout.strip() == "first commit"
+
+
+def test_a_slip_asks_again_and_never_approves() -> None:
+    replies = iter(["y", "yes"])
+    shown: list[str] = []
+    assert review_host(
+        "git push", interactive=True, display=shown.append, read_reply=lambda text: next(replies)
+    )
+    assert any("full word yes" in text for text in shown)
+
+    replies = iter(["y", "ok", "sure", "yes"])
+    shown.clear()
+    assert not review_host(
+        "git push", interactive=True, display=shown.append, read_reply=lambda text: next(replies)
+    )
+    assert "did not run" in shown[-1]
+
+
+@pytest.mark.parametrize("reply", ["", "n", "no"])
+def test_a_clear_no_rejects_at_once_and_says_so(reply: str) -> None:
+    asked: list[str] = []
+    shown: list[str] = []
+
+    def read(text: str) -> str:
+        asked.append(text)
+        return reply
+
+    assert not review_host("git push", interactive=True, display=shown.append, read_reply=read)
+    assert len(asked) == 1 and "did not run" in shown[-1]
+
+
+def test_only_the_first_command_of_a_response_runs_in_order(tmp_path: Path) -> None:
+    calls = [("run_on_host", {"command": f'{PY} "print({n})"'}) for n in range(5)]
+    script = Script(main=[calls, "ok"])
+    review = MagicMock(return_value=True)
+    notes: list[str] = []
+    agent = create_agent(
+        Settings(workspace=tmp_path), model=script.model(), review_host=review, notify=notes.append
+    )
+    run_turn(agent)
+    review.assert_called_once_with(calls[0][1]["command"])
+    assert notes == ["run_on_host: exit code 0\n  0"]
+    assert script.main_requests[-1].count("only the first run_on_host") == 4
+
+
+def test_user_sees_the_end_of_failed_output_cleanly(tmp_path: Path) -> None:
+    notes: list[str] = []
+    agent, _ = make_agent(tmp_path, notes=notes)
+    command = f'{PY} "import sys;[print(i) for i in range(20)];print(chr(27)+chr(91)+chr(50)+chr(74)+chr(102));sys.exit(1)"'
+    tool_call(agent, command)
+    assert notes[0].startswith("run_on_host: exit code 1")
+    lines = notes[0].splitlines()
+    assert len(lines) == 1 + host.MAX_SHOWN_LINES and lines[-1] == "  f"
+    assert "\x1b" not in notes[0]
