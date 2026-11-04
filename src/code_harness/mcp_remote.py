@@ -65,7 +65,14 @@ def load_remote_config(path: Path) -> RemoteMCPConfig:
     try:
         if path.stat().st_size > 16384:
             raise ValueError
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return parse_remote_config(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, TypeError, UnicodeError, OSError):
+        raise WorkspaceError("Invalid remote MCP configuration; expected name and url") from None
+
+
+def parse_remote_config(data: Any) -> RemoteMCPConfig:
+    """Validate a remote server definition; only name and url are accepted."""
+    try:
         if not isinstance(data, dict) or set(data) != {"name", "url"}:
             raise ValueError
         name, url = data["name"], data["url"]

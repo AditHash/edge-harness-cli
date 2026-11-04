@@ -38,7 +38,14 @@ def load_mcp_config(path: Path) -> MCPServerConfig:
     try:
         if path.stat().st_size > 16384:
             raise WorkspaceError("MCP configuration exceeds the size limit")
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return parse_mcp_config(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, TypeError, UnicodeError, OSError):
+        raise WorkspaceError("Invalid MCP configuration; expected name and command array") from None
+
+
+def parse_mcp_config(data: Any) -> MCPServerConfig:
+    """Validate a local server definition; only name and command are accepted."""
+    try:
         if not isinstance(data, dict) or set(data) != {"name", "command"}:
             raise ValueError
         name = data["name"]
