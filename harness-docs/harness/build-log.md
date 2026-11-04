@@ -212,3 +212,9 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Tests: default 216 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 225 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
 - Live (ap-south-1, before the queued-budget check): Haiku 4.5 spawned 12 `explore` subagents in one response; 12 finished, 0 failed, correct combined answer, 8s, 34,497 in / 2,360 out. The budget stop has not been hit on a real model.
 - One `HARNESS_TEST_WSL=1` run right after the default suite had 3 failures (names not captured); the next two runs on the same code had none. Cause unknown, so a WSL test may be flaky.
+
+## 2026-11-04 - Web search and fetch
+
+- Added guarded `web_search` (Exa) and `web_fetch` for the main agent and `explore` subagents, with separate approvals.
+- Not exercised live: approval prompts at a terminal, and a real model choosing these tools (the AWS login had expired during this work).
+- Tests: default 246 passed, 14 skipped in 47.59s; `HARNESS_TEST_WSL=1`: 255 passed, 5 skipped in 64.65s (0:01:04). Ruff and mypy clean.

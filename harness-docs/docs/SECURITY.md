@@ -121,10 +121,26 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   tools: `explore` and `review` are read-only, `test` adds the sandbox, `edit` adds edits and the
   sandbox. A role whose capability is unavailable is not offered.
 - Subagents never get `spawn_subagent` (depth one) or MCP tools, because the MCP approval guard is a
-  hook on the main agent. No subagent has network or host command access.
+  hook on the main agent. No subagent has host command access, and only `explore` can reach the
+  network, through the approved web tools.
 - Edits and commands use the main agent's guarded tools and its approval lock, so a subagent cannot
   skip an approval. `approve-all` covers them exactly as it covers the main agent.
 - Limits: the number of subagents is not capped. Up to `HARNESS_SUBAGENT_MAX_PARALLEL` run at once
   and new spawns stop once `HARNESS_SUBAGENT_TURN_TOKENS` uncached tokens are used in a turn; running
   subagents finish, so a turn can pass that figure. Each has the main agent's turn and output limits
   and a 20,000 character report. Provider errors are reduced to the exception type. Reports are marked untrusted.
+
+## Web search and fetch (2026-11-04)
+
+- The SDK's built-in `web_fetch` is not used: it has no block on private addresses, so a
+  prompt-injected model could reach a cloud metadata service or the LAN, including through a redirect.
+- `web_fetch` allows http and https only, refuses credentials in URLs, and requires every resolved
+  address to be public. Each redirect hop is checked again, and the connection goes to the checked
+  address, so a DNS change cannot move it. Text responses only, at most 5 MB and 50,000 characters,
+  30 seconds. No cookies or credentials are sent.
+- `web_search` uses Exa's hosted endpoint, a third party that receives every query under its own terms.
+- Every search and fetch needs approval and is refused without a terminal. `/approve` for edits and
+  commands does not cover them. Typing `a` covers all searches, or one host, for the session.
+- **Remaining risk:** a URL or query can carry repository content out, and a host approved with `a`
+  is not asked again, although each URL is still shown. Read URLs with long query strings before
+  approving. Web content is marked untrusted, but a model can still be misled by it.
