@@ -217,6 +217,25 @@ def sessions_table(infos: list[Any], current: str, now: float) -> Table:
     return table
 
 
+def mcp_table(servers: dict[str, Any], connected: list[str]) -> Table | Text:
+    """Saved MCP servers and which are connected in this chat."""
+    from code_harness.mcp_registry import describe
+
+    if not servers and not connected:
+        return Text("No saved MCP servers. Add one: edge-harness --mcp-add server.json")
+    table = Table(title="MCP servers", title_style="bold", show_edge=False)
+    table.add_column("name", style="cyan")
+    table.add_column("state")
+    table.add_column("definition")
+    for name, server in servers.items():
+        state = Text("connected", "green") if name in connected else Text("saved", "dim")
+        table.add_row(Text(name), state, Text(describe(server)))
+    for name in connected:
+        if name not in servers:
+            table.add_row(Text(name), Text("connected", "green"), Text("from --mcp-config"))
+    return table
+
+
 def time_ago(seconds: float) -> str:
     minutes = int(seconds // 60)
     if minutes < 1:
@@ -236,6 +255,7 @@ SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/compact", "summarize older messages now"),
     ("/plan", "show the task plan"),
     ("/changes", "files changed this session"),
+    ("/mcp", "saved MCP servers; /mcp connect <name> connects one"),
     ("/approve", "show approvals"),
     ("/approve ask", "ask every time again"),
     ("/sessions", "list saved sessions"),

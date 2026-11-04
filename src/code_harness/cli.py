@@ -439,62 +439,79 @@ def _make_agent(
     )
 
 
-def _open_mcp(
-    stack: contextlib.ExitStack, config_path: Path | None, settings: Settings
-) -> list[Any]:
-    if config_path is None:
-        return []
-    from code_harness.mcp_integration import connect_sandboxed_mcp, load_mcp_config
+def _connect_server(stack: contextlib.ExitStack, server: Any, settings: Settings) -> list[Any]:
+    """Ask the user, then connect one local (sandboxed) or remote MCP server."""
+    from code_harness.mcp_integration import connect_sandboxed_mcp
+    from code_harness.mcp_remote import RemoteMCPConfig, connect_remote_mcp, validate_remote_url
 
-    try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeError):
-        raise WorkspaceError("Invalid MCP configuration file") from None
-    if isinstance(raw, dict) and "url" in raw:
-        return _open_remote_mcp(stack, config_path)
-    config = load_mcp_config(config_path)
+    ui = _terminal_io()
+    if isinstance(server, RemoteMCPConfig):
+        validate_remote_url(server.url)
+        details = json.dumps({"name": server.name, "url": server.url}, ensure_ascii=True, indent=2)
+        if not review_mcp(
+            "REMOTE server connection",
+            details,
+            interactive=ui.interactive,
+            note="Approved tool arguments are sent to this remote host. No credentials are sent.",
+            display=ui.display,
+            read_reply=ui.read_reply,
+        ):
+            raise WorkspaceError("Remote MCP connection was not approved")
+        tools, _ = stack.enter_context(connect_remote_mcp(server))
+        console.print(f"Remote MCP server {server.name}: {len(tools)} tools.", markup=False)
+        return list(tools)
     details = json.dumps(
-        {"name": config.name, "command": config.command}, ensure_ascii=True, indent=2
+        {"name": server.name, "command": server.command}, ensure_ascii=True, indent=2
     )
     if not review_mcp(
         "server startup",
         details,
-        interactive=sys.stdin.isatty(),
-        display=lambda text: console.print(text, markup=False, highlight=False),
-        read_reply=input,
+        interactive=ui.interactive,
+        display=ui.display,
+        read_reply=ui.read_reply,
     ):
         raise WorkspaceError("MCP server startup was not approved")
     tools, omitted = stack.enter_context(
         connect_sandboxed_mcp(
             Workspace(settings.workspace),
-            config,
+            server,
             settings.harness_state_dir / "mcp-temp",
             distro=settings.sandbox_wsl_distribution,
         )
     )
     console.print(
-        f"MCP server {config.name}: {len(tools)} tools; {omitted} snapshot files omitted."
+        f"MCP server {server.name}: {len(tools)} tools; {omitted} snapshot files omitted.",
+        markup=False,
     )
-    return tools
+    return list(tools)
 
 
-def _open_remote_mcp(stack: contextlib.ExitStack, config_path: Path) -> list[Any]:
-    from code_harness.mcp_remote import connect_remote_mcp, load_remote_config, validate_remote_url
+def _open_mcp(
+    stack: contextlib.ExitStack,
+    config_path: Path | None,
+    settings: Settings,
+    names: list[str] | None = None,
+    connected: list[str] | None = None,
+) -> list[Any]:
+    """Connect a server from a file and/or saved servers by name; each needs approval."""
+    if config_path is None and not names:
+        return []
+    from code_harness.mcp_registry import load_servers, read_server_file
 
-    config = load_remote_config(config_path)
-    validate_remote_url(config.url)
-    details = json.dumps({"name": config.name, "url": config.url}, ensure_ascii=True, indent=2)
-    if not review_mcp(
-        "REMOTE server connection",
-        details,
-        interactive=sys.stdin.isatty(),
-        note="Approved tool arguments are sent to this remote host. No credentials are sent.",
-        display=lambda text: console.print(text, markup=False, highlight=False),
-        read_reply=input,
-    ):
-        raise WorkspaceError("Remote MCP connection was not approved")
-    tools, _ = stack.enter_context(connect_remote_mcp(config))
-    console.print(f"Remote MCP server {config.name}: {len(tools)} tools.")
+    servers = [read_server_file(config_path)] if config_path is not None else []
+    saved = load_servers(settings.harness_state_dir)
+    for name in names or []:
+        if name not in saved:
+            raise WorkspaceError(f"No saved MCP server named {name}; see edge-harness --mcp-list")
+        servers.append(saved[name])
+    seen = [server.name for server in servers]
+    if len(set(seen)) != len(seen):
+        raise WorkspaceError("The same MCP server was selected twice")
+    tools: list[Any] = []
+    for server in servers:
+        tools.extend(_connect_server(stack, server, settings))
+        if connected is not None:
+            connected.append(server.name)
     return tools
 
 
@@ -537,6 +554,7 @@ def chat(
     project_instructions: bool = False,
     skill: Annotated[list[str] | None, typer.Option("--skill")] = None,
     mcp_config: Path | None = None,
+    mcp: Annotated[list[str] | None, typer.Option("--mcp")] = None,
 ) -> None:
     """Start an interactive conversation; edits require approval."""
     workspace = workspace or Path.cwd()
@@ -549,7 +567,8 @@ def chat(
             project_instructions=project_instructions,
             skills=skill or [],
         )
-        mcp_tools = _open_mcp(stack, mcp_config, settings)
+        connected_servers: list[str] = []
+        mcp_tools = _open_mcp(stack, mcp_config, settings, mcp, connected_servers)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
         SESSION_APPROVALS.reset()
@@ -580,7 +599,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /approve [ask]  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /mcp  /approve [ask]  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -651,6 +670,36 @@ def chat(
                     console.print(changes_table(SESSION_CHANGES, "Changed this session"))
                 else:
                     console.print("No approved file changes in this session.")
+            elif prompt == "/mcp":
+                from code_harness.mcp_registry import load_servers
+                from code_harness.ui import mcp_table
+
+                console.print(
+                    mcp_table(load_servers(settings.harness_state_dir), connected_servers)
+                )
+            elif prompt.startswith("/mcp connect "):
+                from code_harness.mcp_registry import load_servers
+
+                name = prompt.removeprefix("/mcp connect ").strip()
+                server = load_servers(settings.harness_state_dir).get(name)
+                if server is None:
+                    console.print(f"No saved MCP server named {name}. See /mcp.", markup=False)
+                elif name in connected_servers:
+                    console.print(f"MCP server {name} is already connected.", markup=False)
+                else:
+                    try:
+                        added = _connect_server(stack, server, settings)
+                        replacement = _make_agent(
+                            workspace, manager, guidance, current_model, [*mcp_tools, *added]
+                        )
+                    except WorkspaceError as exc:
+                        console.print(str(exc), markup=False)
+                    except Exception as exc:  # noqa: BLE001 - may hold server-supplied text
+                        console.print(f"[red]Cannot connect MCP ({type(exc).__name__}).[/red]")
+                    else:
+                        agent = replacement
+                        mcp_tools = [*mcp_tools, *added]
+                        connected_servers.append(name)
             elif prompt == "/approve":
                 console.print(SESSION_APPROVALS.describe(), markup=False)
             elif prompt == "/approve ask":

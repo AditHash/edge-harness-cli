@@ -212,6 +212,29 @@ def resolve_model(effective: dict[str, str]) -> None:
         console.print(f"Region set to {catalog.HOME_REGION} for {model_id}.", markup=False)
 
 
+def mcp_command(add: Path | None, remove: str | None) -> None:
+    """Manage saved MCP servers; nothing is started and no AWS call is made."""
+    from code_harness.mcp_registry import add_server, load_servers, remove_server
+    from code_harness.ui import mcp_table
+    from code_harness.workspace import WorkspaceError
+
+    if add is not None:
+        try:
+            server = add_server(state_dir(), add)
+        except WorkspaceError as exc:
+            console.print(str(exc), markup=False)
+            raise typer.Exit(1) from None
+        console.print(
+            f"Saved MCP server {server.name}. Connect with --mcp {server.name}", markup=False
+        )
+    if remove is not None:
+        if not remove_server(state_dir(), remove):
+            console.print(f"No saved MCP server named {remove}.", markup=False)
+            raise typer.Exit(1)
+        console.print(f"Removed MCP server {remove}.", markup=False)
+    console.print(mcp_table(load_servers(state_dir()), []))
+
+
 @launcher.command()
 def main(
     region: Annotated[str | None, typer.Option(help="Save and use this AWS region")] = None,
@@ -246,12 +269,25 @@ def main(
     mcp_config: Annotated[
         Path | None, typer.Option(help="Connect the MCP server in this JSON file")
     ] = None,
+    mcp: Annotated[
+        list[str] | None, typer.Option("--mcp", help="Connect a saved MCP server (repeatable)")
+    ] = None,
+    mcp_add: Annotated[
+        Path | None, typer.Option(help="Save the MCP server in this JSON file, then exit")
+    ] = None,
+    mcp_remove: Annotated[
+        str | None, typer.Option(help="Forget a saved MCP server, then exit")
+    ] = None,
+    mcp_list: Annotated[bool, typer.Option("--mcp-list", help="List saved MCP servers")] = False,
 ) -> None:
     """Chat about the current folder. Region/model/profile options are remembered."""
     if manual:
         from code_harness.manual import MANUAL
 
         console.print(MANUAL, markup=False, highlight=False)
+        return
+    if mcp_add is not None or mcp_remove is not None or mcp_list:
+        mcp_command(mcp_add, mcp_remove)
         return
     updates = {
         key: value
@@ -309,8 +345,8 @@ def main(
 
     if tui:
         cli.main()
-        if mcp_config is not None:
-            console.print("--mcp-config works only in chat, not with --tui.")
+        if mcp_config is not None or mcp:
+            console.print("MCP servers work only in chat, not with --tui.")
             raise typer.Exit(1)
         cli.tui(
             workspace=Path.cwd(),
@@ -326,6 +362,7 @@ def main(
             project_instructions=project_instructions,
             skill=skill,
             mcp_config=mcp_config,
+            mcp=mcp,
         )
 
 

@@ -11,6 +11,10 @@ Start
   edge-harness --skill <name>                   load .agents/skills/<name>/SKILL.md (repeatable)
   edge-harness --project-instructions           load AGENTS.md as guidance
   edge-harness --mcp-config <file.json>         connect the MCP server in this file (chat only)
+  edge-harness --mcp <name>                     connect a saved MCP server (repeatable)
+  edge-harness --mcp-add <file.json>            save an MCP server
+  edge-harness --mcp-remove <name>              forget a saved MCP server
+  edge-harness --mcp-list                       list saved MCP servers
 
 Model
   edge-harness --model auto                     route per request, with failover (saved)
@@ -38,6 +42,8 @@ Inside chat
   /compact              summarize older messages
   /plan                 show task plan
   /changes              files changed this session
+  /mcp                  saved MCP servers and connection state
+  /mcp connect <name>   connect a saved MCP server
   /approve              show approvals
   /approve ask          ask every time again
   /sessions             list sessions

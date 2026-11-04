@@ -224,7 +224,7 @@ def test_tui_receives_resume_and_refuses_mcp(monkeypatch: pytest.MonkeyPatch) ->
     result = CliRunner().invoke(launcher.launcher, ["--tui", "--resume", "abc", "--skill", "s"])
     assert result.exit_code == 0, result.output
     assert started["resume"] == "abc" and started["skill"] == ["s"]
-    refused = CliRunner().invoke(launcher.launcher, ["--tui", "--mcp-config", "x.json"])
+    refused = CliRunner().invoke(launcher.launcher, ["--tui", "--mcp", "x"])
     assert refused.exit_code == 1 and "chat" in refused.output
 
 
