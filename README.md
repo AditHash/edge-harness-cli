@@ -70,6 +70,27 @@ approved changes in the session.
 
 At a terminal the input box has a live status bar: model, folder, approval mode, context left, and session tokens. Set `NO_COLOR=1` to turn colors off. Close running sessions before `uv tool install --editable . --force`; on Windows they lock the tool folder.
 
+## Sessions, images, skills and MCP
+
+**Resume.** Conversations are saved in `~/.edge-harness/sessions.sqlite`, per folder.
+`edge-harness --continue` resumes the latest; `--resume <id>` or `/resume <id>` take a full id or
+a unique prefix of at least 4 characters. `/sessions` lists title, age and turns.
+
+**Images.** `/image <path> [message]` attaches a PNG, JPEG, GIF or WebP (up to 3.75 MB, 5 per
+message), quoted paths included. You choose the file, so it may be outside the repo, but its
+header must be a real image; a renamed secret is refused. `auto` sends images only to models known
+to read them. Images are stored in the session and resent with the conversation, which adds cost.
+
+**Skills.** A skill is `.agents/skills/<name>/SKILL.md`, or `<name>/SKILL.md` under
+`~/.edge-harness/skills` for every repo; the project one wins. `--skill <name>`, or `/skills` and
+`/skill <name>` mid-chat. Skill text is guidance marked untrusted, so nothing in it runs and it
+grants no permissions. A model may not always follow it.
+
+**MCP.** `edge-harness --mcp-add server.json` saves a server in your user folder, never the repo;
+`--mcp-list`, `--mcp-remove <name>`, `--mcp <name>` to connect, or `/mcp` and `/mcp connect <name>`
+mid-chat. Connecting and every tool call need approval. `--mcp-config <file>` connects one without
+saving.
+
 ## India / Mumbai models and `auto`
 
 ```powershell

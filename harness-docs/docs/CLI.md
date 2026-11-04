@@ -4,7 +4,7 @@
 
 | Command | Purpose |
 | --- | --- |
-| `edge-harness` | Chat in the current folder. `--region/--model/--profile` are saved and reused; `--tui`, `--resume ID`, `--show-config`, `--no-login`, `--model auto`, `--residency india|mumbai|any`, `--list-models`, `--probe-models N`. Runs `aws login` when credentials are missing/expired (interactive only). |
+| `edge-harness` | Chat in the current folder. `--region/--model/--profile` are saved and reused; `--tui`, `--resume ID`, `--show-config`, `--no-login`, `--model auto`, `--residency india|mumbai|any`, `--list-models`, `--probe-models N`, `--continue`, `--skill NAME`, `--project-instructions`, `--mcp NAME`, `--mcp-config FILE`, `--mcp-add FILE`, `--mcp-remove NAME`, `--mcp-list`, `--manual`. Runs `aws login` when credentials are missing/expired (interactive only). |
 | `harness doctor` | Local checks only: Python, workspace, AWS settings present, sandbox backend, Git. No AWS call. |
 | `harness ask PROMPT` | One streamed turn. Options: `--workspace PATH`, `--project-instructions`, `--skill NAME` (repeatable), `--mcp-config FILE`. |
 | `harness chat` | Interactive Rich session. Same options plus `--resume SESSION_ID`. |
@@ -18,8 +18,11 @@ Non-interactive stdin never approves anything. At an approval prompt type `y` or
 | --- | --- |
 | `/help` | List commands |
 | `/new`, `/clear` | Start a new session (same workspace) |
-| `/sessions` | List sessions for this workspace |
-| `/resume ID` | Switch to a completed session |
+| `/sessions` | Sessions in this folder: short id, last used, turns, first message |
+| `/resume ID` | Switch session; a unique id prefix of 4+ characters works |
+| `/image PATH [TEXT]` | Attach an image to the next message, or send it with TEXT |
+| `/skills`, `/skill NAME` | List skills; load one into this chat |
+| `/mcp`, `/mcp connect NAME` | List saved MCP servers; connect one (needs approval) |
 | `/compact` | Summarize older messages (one model call; sends them to the provider) |
 | `/model [ID]` | Show or switch the Bedrock model; access is checked on the next request |
 | `/plan` | Show the agent's recorded task plan |
