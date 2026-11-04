@@ -206,3 +206,20 @@ def test_context_report(tmp_path: Path) -> None:
     )
     report = _context_report(agent, settings)
     assert "50,000 / 200,000" in report and "25.0%" in report and "140,000" in report
+
+
+def test_unknown_context_model_gets_cautious_limit_and_no_warning(tmp_path: Path) -> None:
+    import warnings
+
+    from code_harness.agent import UNKNOWN_CONTEXT_FALLBACK, create_agent
+    from code_harness.config import Settings
+
+    agent = create_agent(
+        Settings(
+            workspace=tmp_path, bedrock_model_id="in.moonshotai.kimi-k3", aws_region="ap-south-1"
+        )
+    )
+    assert agent.model.context_window_limit == UNKNOWN_CONTEXT_FALLBACK
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert agent.model.estimate_utilization(64_000) == 0.5
