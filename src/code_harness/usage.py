@@ -3,15 +3,18 @@
 import threading
 from dataclasses import dataclass, field
 
-MAX_SUBAGENTS_PER_TURN = 8
-
 
 @dataclass
 class SubagentLedger:
-    """One main agent's subagent budget, unreported tokens and stop signal."""
+    """One main agent's subagent token budget, unreported tokens and stop signal.
 
+    The number of subagents is not limited. `token_budget` caps the uncached tokens they use in one
+    turn (0 means no cap), which is what bounds the cost of spawning many.
+    """
+
+    token_budget: int = 0
     stop: threading.Event = field(default_factory=threading.Event)
-    spawned_this_turn: int = 0
+    tokens_this_turn: int = 0
     spawned_total: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -21,19 +24,23 @@ class SubagentLedger:
     def begin_turn(self) -> None:
         self.stop.clear()
         with self._lock:
-            self.spawned_this_turn = 0
+            self.tokens_this_turn = 0
+
+    def budget_used(self) -> bool:
+        with self._lock:
+            return bool(self.token_budget) and self.tokens_this_turn >= self.token_budget
 
     def reserve(self, role: str) -> str | None:
-        """A display label for a new subagent, or None when the turn's budget is used up."""
+        """A display label for a new subagent, or None when the turn's tokens are used up."""
+        if self.budget_used():
+            return None
         with self._lock:
-            if self.spawned_this_turn >= MAX_SUBAGENTS_PER_TURN:
-                return None
-            self.spawned_this_turn += 1
             self.spawned_total += 1
             return f"{role}-{self.spawned_total}"
 
     def add(self, input_tokens: int, output_tokens: int, cached_tokens: int) -> None:
         with self._lock:
+            self.tokens_this_turn += input_tokens + output_tokens
             self.input_tokens += input_tokens
             self.output_tokens += output_tokens
             self.cached_tokens += cached_tokens

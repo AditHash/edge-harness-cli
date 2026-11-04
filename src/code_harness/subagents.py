@@ -18,7 +18,6 @@ from strands.models import Model
 from code_harness.streaming import stream_turn
 from code_harness.usage import SubagentLedger
 
-MAX_PARALLEL_SUBAGENTS = 3
 MAX_RESULT_CHARS = 20_000
 
 _BASE_PROMPT = """You are a subagent working on one task for a coding assistant. You cannot see its
@@ -39,8 +38,10 @@ def build_spawn_tool(
     roles: dict[str, SubagentRole],
     ledger: SubagentLedger,
     notify: Callable[[str], None],
+    max_parallel: int,
 ) -> Any:
-    slots = threading.BoundedSemaphore(MAX_PARALLEL_SUBAGENTS)
+    # Extra subagents wait for a slot; none is refused for being one too many.
+    slots = threading.BoundedSemaphore(max_parallel)
 
     @tool
     def spawn_subagent(role: str, task: str) -> str:
@@ -57,7 +58,9 @@ def build_spawn_tool(
             return "Subagent not started: the task is empty."
         label = ledger.reserve(role)
         if label is None:
-            return "Subagent not started: this turn's subagent limit is reached. Do it yourself."
+            return (
+                "Subagent not started: this turn's subagent token budget is used. Do it yourself."
+            )
         with slots:
             if ledger.stop.is_set():
                 return f"Subagent {label} cancelled before it started."

@@ -13,7 +13,7 @@ from strands.tools.mcp.mcp_agent_tool import MCPAgentTool
 from code_harness.agent import create_agent
 from code_harness.config import Settings
 from code_harness.streaming import stream_turn, tool_summary
-from code_harness.usage import MAX_SUBAGENTS_PER_TURN, SubagentLedger
+from code_harness.usage import SubagentLedger
 
 READ_ONLY = {
     "list_repo",
@@ -184,16 +184,31 @@ def test_mcp_tools_never_reach_subagents(tmp_path: Path) -> None:
     assert all("remote_action" not in names for names in script.sub_tools)
 
 
-def test_turn_budget_and_empty_task(tmp_path: Path) -> None:
+def test_token_budget_stops_new_spawns_until_next_turn(tmp_path: Path) -> None:
     script = Script(main=[])
-    agent = create_agent(Settings(workspace=tmp_path), model=script.model())
+    # Each fake subagent uses 12 uncached tokens, so the third spawn finds the budget used.
+    settings = Settings(workspace=tmp_path, harness_subagent_turn_tokens=24)
+    agent = create_agent(settings, model=script.model())
     run = direct(agent)
     assert "empty" in run("explore", "   ")
-    for _ in range(MAX_SUBAGENTS_PER_TURN):
-        assert "limit" not in run("explore", "task")
-    assert "limit is reached" in run("explore", "task")
+    assert "budget" not in run("explore", "task")
+    assert "budget" not in run("explore", "task")
+    assert "budget is used" in run("explore", "task")
     agent.subagents.begin_turn()
-    assert "limit" not in run("explore", "task")
+    assert "budget" not in run("explore", "task")
+
+
+def test_number_of_subagents_is_not_limited(tmp_path: Path) -> None:
+    script = Script(main=[[spawn("explore") for _ in range(25)], "ok"])
+    run_turn(create_agent(Settings(workspace=tmp_path), model=script.model()))
+    assert len(script.sub_tools) == 25
+    assert "budget" not in script.main_requests[-1]
+
+
+def test_zero_budget_means_no_cap() -> None:
+    ledger = SubagentLedger(token_budget=0)
+    ledger.add(10**9, 10**9, 0)
+    assert ledger.reserve("explore") == "explore-1"
 
 
 def test_parallel_spawns_run_together_with_a_cap(tmp_path: Path) -> None:
@@ -217,7 +232,8 @@ def test_parallel_spawns_run_together_with_a_cap(tmp_path: Path) -> None:
 
     model = script.model()
     model.stream.side_effect = tracked
-    run_turn(create_agent(Settings(workspace=tmp_path), model=model))
+    settings = Settings(workspace=tmp_path, harness_subagent_max_parallel=3)
+    run_turn(create_agent(settings, model=model))
     assert len(script.sub_tools) == 5
     assert active["peak"] == 3
 

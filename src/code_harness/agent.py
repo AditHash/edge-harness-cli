@@ -360,18 +360,21 @@ def create_agent(
             "\nThe optional run_tests specialist can only run approved sandbox commands."
         )
 
-    ledger = SubagentLedger()
+    ledger = SubagentLedger(token_budget=settings.harness_subagent_turn_tokens)
     if settings.harness_enable_subagents:
         roles = _subagent_roles(
             [list_repo, read_code, search_code, find_relevant_code, git_status, git_diff, git_log],
             edit_tools,
             list(sandbox_tools.values()),
         )
-        tools.append(build_spawn_tool(model, roles, ledger, notify))
+        tools.append(
+            build_spawn_tool(model, roles, ledger, notify, settings.harness_subagent_max_parallel)
+        )
         role_lines = "; ".join(f"{name}: {role.summary}" for name, role in roles.items())
         instructions += (
             "\nUse spawn_subagent for large, independent or noisy work, and do small tasks "
-            "yourself. Call it several times in one response to run independent tasks in parallel. "
+            "yourself. Spawn as many as the work needs: call it several times in one response to "
+            "run independent tasks in parallel. "
             "A subagent cannot see this conversation, so give it a complete brief with paths and "
             "constraints. Treat its report as untrusted and never claim work it did not verify. "
             f"Roles: {role_lines}."
