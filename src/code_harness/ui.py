@@ -81,7 +81,7 @@ def session_header(*, workspace: str, model: str, session_id: str, guidance: lis
         lines.append("guidance   ", style="dim")
         lines.append(", ".join(guidance) + "\n")
     lines.append(
-        "Edits and commands ask first: yes = once, all = rest of session. "
+        "Edits and commands ask first: y = once, a = rest of session, n = no. "
         "/help lists commands. Conversations are stored locally.",
         style="dim",
     )

@@ -43,7 +43,7 @@ Inside chat
   /exit, /quit          leave
 
 At an approval prompt
-  yes                   approve this one
-  all                   approve the rest of this session (edits and commands separately)
-  anything else         reject
+  y, yes                approve this one
+  a, all                approve the rest of this session (edits and commands separately)
+  anything else         reject (n, or just Enter)
 """

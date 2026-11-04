@@ -10,7 +10,7 @@
 | `harness chat` | Interactive Rich session. Same options plus `--resume SESSION_ID`. |
 | `harness tui` | Textual UI. Options: `--workspace`, `--project-instructions`, `--skill`. Approvals are modal; only the literal reply `yes` approves; `Esc` rejects. TUI slash commands: `/usage`, `/exit`. |
 
-Non-interactive stdin never approves anything. At an approval prompt type `yes` (this change only) or `all` (this and every later change of the same kind - file edits or sandbox commands - for the rest of the chat; diffs are still shown). MCP calls always ask.
+Non-interactive stdin never approves anything. At an approval prompt type `y` or `yes` (this change only), or `a` or `all` (this and every later change of the same kind - file edits or sandbox commands - for the rest of the chat; diffs are still shown). Anything else, including Enter, rejects. Parallel tool calls are reviewed one at a time. MCP calls always ask and need the word `yes`.
 
 ## Chat slash commands
 
