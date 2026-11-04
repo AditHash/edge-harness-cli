@@ -1,8 +1,9 @@
 """Fail-closed review of immutable proposals at the user interface boundary."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from unicodedata import category
+from urllib.parse import urlsplit
 
 from code_harness.proposals import Proposal
 from code_harness.workspace import WorkspaceError
@@ -22,20 +23,30 @@ def validate_reviewable(proposal: Proposal) -> None:
 class SessionApprovals:
     """Standing approvals the user granted by typing `all`; they last for one chat session.
 
-    Edits and sandbox commands are tracked separately. MCP calls are never covered.
+    Edits, sandbox commands, web searches and each fetched host are tracked separately, so
+    approving one never approves another. MCP calls are never covered.
     """
 
     edits: bool = False
     commands: bool = False
+    searches: bool = False
+    web_hosts: set[str] = field(default_factory=set)
 
     def reset(self) -> None:
         self.edits = False
         self.commands = False
+        self.searches = False
+        self.web_hosts.clear()
 
     def describe(self) -> str:
         edits = "approved for this session" if self.edits else "ask each time"
         commands = "approved for this session" if self.commands else "ask each time"
-        return f"File changes: {edits}. Sandbox commands: {commands}. MCP calls: ask each time."
+        searches = "approved for this session" if self.searches else "ask each time"
+        hosts = ", ".join(sorted(self.web_hosts)) or "none"
+        return (
+            f"File changes: {edits}. Sandbox commands: {commands}. Web searches: {searches}. "
+            f"Web pages approved from: {hosts}. MCP calls: ask each time."
+        )
 
 
 def _decide(reply: str) -> str:
@@ -98,6 +109,59 @@ def review_command(
         decision = _decide(read_reply(f"Run this command? {choices}: "))
         if decision == "all" and session is not None:
             session.commands = True
+            return True
+        return decision == "yes"
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
+
+
+def review_search(
+    query: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+    session: SessionApprovals | None = None,
+) -> bool:
+    """Approve one web search; the query is sent to a third party."""
+    if not interactive:
+        return False
+    try:
+        display(f"Proposed web search (the query goes to the third-party service Exa):\n{query}")
+        if session is not None and session.searches:
+            display("Run under your session approval (/approve ask to stop).")
+            return True
+        choices = "[y]es / [a]ll searches this session / [n]o" if session else "[y]es / [n]o"
+        decision = _decide(read_reply(f"Search the web? {choices}: "))
+        if decision == "all" and session is not None:
+            session.searches = True
+            return True
+        return decision == "yes"
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
+
+
+def review_fetch(
+    url: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+    session: SessionApprovals | None = None,
+) -> bool:
+    """Approve one page fetch. A standing approval covers one host, never the whole web."""
+    if not interactive:
+        return False
+    host = urlsplit(url).hostname or ""
+    try:
+        display(f"Proposed web fetch (this site receives the full URL):\n{url}")
+        if session is not None and host in session.web_hosts:
+            display("Fetched under your session approval (/approve ask to stop).")
+            return True
+        choices = f"[y]es / [a]ll from {host} this session / [n]o" if session else "[y]es / [n]o"
+        decision = _decide(read_reply(f"Fetch this page? {choices}: "))
+        if decision == "all" and session is not None:
+            session.web_hosts.add(host)
             return True
         return decision == "yes"
     except (EOFError, KeyboardInterrupt, OSError):

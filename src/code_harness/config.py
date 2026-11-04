@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     harness_enable_reviewer: bool = False
     harness_enable_tester: bool = False
     harness_enable_subagents: bool = True
+    harness_enable_web: bool = True
     harness_subagent_max_parallel: int = Field(default=8, ge=1, le=32)
     harness_subagent_turn_tokens: int = Field(default=2_000_000, ge=0)
     input_price_per_mtok: float | None = None
