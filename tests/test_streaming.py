@@ -211,6 +211,8 @@ def test_tool_call_events_name_their_target() -> None:
 
 
 def test_cached_prompt_tokens_are_reported() -> None:
+    from rich.text import Text
+
     from code_harness.cli import _token_text
     from code_harness.usage import UsageTracker
 
@@ -231,10 +233,9 @@ def test_cached_prompt_tokens_are_reported() -> None:
 
     call, turn, _ = asyncio.run(collect())
     assert call.cached_tokens == 1040 and turn.cached_tokens == 1040
-    assert _token_text(call) == "61 in + 1,040 cached / 38 out"
-    assert _token_text(SimpleNamespace(input_tokens=5, output_tokens=2, cached_tokens=0)) == (
-        "5 in / 2 out"
-    )
+    assert Text.from_markup(_token_text(call)).plain == "61 in + 1,040 cached / 38 out"
+    plain = _token_text(SimpleNamespace(input_tokens=5, output_tokens=2, cached_tokens=0))
+    assert Text.from_markup(plain).plain == "5 in / 2 out"
     tracker = UsageTracker()
     tracker.add(61, 38, 1040)
     assert "1040 cached input tokens" in tracker.summary()

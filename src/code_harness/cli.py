@@ -147,7 +147,7 @@ class _ThinkingMeter:
         if self.show:
             if not self.active:
                 console.print("\n[dim]Thinking:[/dim]")
-            console.print(text, end="", style="dim italic", markup=False, highlight=False)
+            console.print(text, end="", style="italic magenta", markup=False, highlight=False)
         else:
             message = f"Thinking... ~{self.chars // 4:,} tokens"
             if self.status is None:
@@ -169,8 +169,11 @@ class _ThinkingMeter:
 
 
 def _token_text(event: Any) -> str:
-    cached = f" + {event.cached_tokens:,} cached" if event.cached_tokens else ""
-    return f"{event.input_tokens:,} in{cached} / {event.output_tokens:,} out"
+    cached = f" + [magenta]{event.cached_tokens:,} cached[/magenta]" if event.cached_tokens else ""
+    return (
+        f"[bright_blue]{event.input_tokens:,} in[/bright_blue]{cached} / "
+        f"[bright_green]{event.output_tokens:,} out[/bright_green]"
+    )
 
 
 class _ReplyView:
@@ -221,22 +224,27 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
                 continue
             reply.stop()
             if event.kind == "tool_call":
-                console.print(f"[cyan]  > {escape(event.text)}[/cyan]", highlight=False)
+                name, _, target = event.text.partition(" ")
+                console.print(
+                    f"  [bold bright_cyan]> {escape(name)}[/bold bright_cyan] "
+                    f"[bright_white]{escape(target)}[/bright_white]".rstrip(),
+                    highlight=False,
+                )
             elif event.kind == "tool_result":
                 if event.text.endswith(": failed"):
                     console.print(f"[red]  x {escape(event.text)}[/red]", highlight=False)
             elif event.kind == "call_usage":
-                served = f"{escape(event.text)}  " if event.text else ""
+                served = f"[yellow]{escape(event.text)}[/yellow]  " if event.text else ""
                 console.print(
-                    f"[dim]    {served}{_token_text(event)}[/dim]",
+                    f"    {served}{_token_text(event)}",
                     highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
                     tracker.add(event.input_tokens, event.output_tokens, event.cached_tokens)
                 console.rule(
-                    f"[dim]turn: {_token_text(event)}[/dim]",
-                    style="dim",
+                    f"turn: {_token_text(event)}",
+                    style="bright_black",
                 )
             elif event.kind == "compacted":
                 console.print(f"[cyan]{escape(event.text)}[/cyan]")
