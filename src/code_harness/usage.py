@@ -9,9 +9,11 @@ class UsageTracker:
     output_price_per_mtok: float | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_tokens: int = 0
     turns: int = 0
 
-    def add(self, input_tokens: int, output_tokens: int) -> None:
+    def add(self, input_tokens: int, output_tokens: int, cached_tokens: int = 0) -> None:
+        self.cached_tokens += max(0, cached_tokens)
         self.input_tokens += max(0, input_tokens)
         self.output_tokens += max(0, output_tokens)
         self.turns += 1
@@ -29,7 +31,7 @@ class UsageTracker:
     def summary(self) -> str:
         text = (
             f"Session total: {self.turns} turns, {self.input_tokens} input tokens, "
-            f"{self.output_tokens} output tokens"
+            f"{self.output_tokens} output tokens, {self.cached_tokens} cached input tokens"
         )
         cost = self.cost
         if cost is None:

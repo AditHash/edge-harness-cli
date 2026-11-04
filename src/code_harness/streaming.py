@@ -23,6 +23,13 @@ def tool_summary(name: str, arguments: Any) -> str:
     return f"{name} {target}".rstrip()
 
 
+def _cached(usage: dict[str, Any]) -> int:
+    """Prompt tokens served from or written to the provider cache (not in inputTokens)."""
+    return int(usage.get("cacheReadInputTokens", 0) or 0) + int(
+        usage.get("cacheWriteInputTokens", 0) or 0
+    )
+
+
 def _model_id(agent: Any) -> str:
     """The model that served the latest call (the routed choice in auto mode)."""
     try:
@@ -51,6 +58,7 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
                 _model_id(agent),
                 int(usage.get("inputTokens", 0) or 0),
                 int(usage.get("outputTokens", 0) or 0),
+                _cached(usage),
             )
         elif event.get("current_tool_use", {}).get("name"):
             tool = event["current_tool_use"]
@@ -82,6 +90,7 @@ async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
                     f"output tokens: {usage.get('outputTokens', 0)}",
                     int(usage.get("inputTokens", 0) or 0),
                     int(usage.get("outputTokens", 0) or 0),
+                    _cached(usage),
                 )
             removed_after = getattr(manager, "removed_message_count", 0)
             if (

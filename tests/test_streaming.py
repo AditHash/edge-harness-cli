@@ -208,3 +208,33 @@ def test_tool_call_events_name_their_target() -> None:
         "run_sandboxed a [2Jb"
     )
     assert len(tool_summary("t", {"path": "y" * 200})) == 82
+
+
+def test_cached_prompt_tokens_are_reported() -> None:
+    from code_harness.cli import _token_text
+    from code_harness.usage import UsageTracker
+
+    class CachedAgent:
+        async def stream_async(self, prompt, **kwargs):
+            usage = {
+                "inputTokens": 61,
+                "outputTokens": 38,
+                "cacheReadInputTokens": 1032,
+                "cacheWriteInputTokens": 8,
+            }
+            yield {"event": {"metadata": {"usage": usage}}}
+            context = SimpleNamespace(usage=usage)
+            yield {"result": SimpleNamespace(stop_reason="end_turn", invocation_context=context)}
+
+    async def collect():
+        return [e async for e in stream_turn(CachedAgent(), "hi")]
+
+    call, turn, _ = asyncio.run(collect())
+    assert call.cached_tokens == 1040 and turn.cached_tokens == 1040
+    assert _token_text(call) == "61 in + 1,040 cached / 38 out"
+    assert _token_text(SimpleNamespace(input_tokens=5, output_tokens=2, cached_tokens=0)) == (
+        "5 in / 2 out"
+    )
+    tracker = UsageTracker()
+    tracker.add(61, 38, 1040)
+    assert "1040 cached input tokens" in tracker.summary()

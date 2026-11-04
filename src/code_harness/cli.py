@@ -168,6 +168,11 @@ class _ThinkingMeter:
         self.chars = 0
 
 
+def _token_text(event: Any) -> str:
+    cached = f" + {event.cached_tokens:,} cached" if event.cached_tokens else ""
+    return f"{event.input_tokens:,} in{cached} / {event.output_tokens:,} out"
+
+
 class _ReplyView:
     """Streams the assistant's reply as live-rendered Markdown, one block per text segment."""
 
@@ -219,14 +224,14 @@ async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = 
             elif event.kind == "call_usage":
                 served = f"{escape(event.text)}  " if event.text else ""
                 console.print(
-                    f"[dim]    {served}{event.input_tokens:,} in / {event.output_tokens:,} out[/dim]",
+                    f"[dim]    {served}{_token_text(event)}[/dim]",
                     highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
-                    tracker.add(event.input_tokens, event.output_tokens)
+                    tracker.add(event.input_tokens, event.output_tokens, event.cached_tokens)
                 console.rule(
-                    f"[dim]turn: {event.input_tokens:,} in / {event.output_tokens:,} out[/dim]",
+                    f"[dim]turn: {_token_text(event)}[/dim]",
                     style="dim",
                 )
             elif event.kind == "compacted":
