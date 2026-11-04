@@ -121,6 +121,14 @@ def create_agent(
         except WorkspaceError as exc:
             return f"Search failed: {exc}"
 
+    @tool
+    def git_log(limit: int = 20, path: str = "") -> str:
+        """Show recent commits (hash, date, author, subject), optionally for one path."""
+        try:
+            return git_tools.git_log(workspace, limit, path or None)
+        except WorkspaceError as exc:
+            return f"Git unavailable: {exc}"
+
     retriever = WorkspaceRetriever(workspace=workspace, k=5)
 
     @tool
@@ -164,6 +172,7 @@ def create_agent(
         search_code,
         git_status,
         git_diff,
+        git_log,
         update_plan,
         find_relevant_code,
     ]

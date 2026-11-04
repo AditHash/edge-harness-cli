@@ -19,6 +19,7 @@ READ_ONLY_TOOLS = {
     "search_code",
     "git_status",
     "git_diff",
+    "git_log",
     "update_plan",
     "find_relevant_code",
 }

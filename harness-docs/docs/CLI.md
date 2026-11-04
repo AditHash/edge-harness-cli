@@ -33,7 +33,7 @@ Non-interactive stdin never approves anything. At an approval prompt type `y` or
 ## Agent tools
 
 Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_status`,
-`git_diff`, `update_plan`. With approval: `replace_in_file` (exact unique snippet, preferred), `edit_code`, `delete_code` (diff review), `run_sandboxed`
+`git_diff`, `git_log`, `update_plan`. With approval: `replace_in_file` (exact unique snippet, preferred), `edit_code`, `delete_code` (diff review), `run_sandboxed`
 (command review; only where a sandbox backend exists). Opt-in specialists: `explore_repo`,
 `review_changes`, `run_tests`. MCP tools appear with the server name as prefix.
 

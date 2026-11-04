@@ -9,6 +9,7 @@ from code_harness.workspace import PROTECTED, SECRET_SUFFIXES, Workspace, Worksp
 
 MAX_GIT_OUTPUT = 64 * 1024
 GIT_TIMEOUT_SECONDS = 20
+MAX_LOG_COMMITS = 100
 
 # Pathspec exclusions keep protected files out of diffs even when tracked.
 _EXCLUDES = [
@@ -69,6 +70,16 @@ def _run(workspace: Workspace, args: list[str]) -> str:
     return text
 
 
+def _relative_target(workspace: Workspace, path: str | None) -> str:
+    if not path:
+        return "."
+    resolved = (workspace.root / path).resolve()
+    try:
+        return Path(resolved.relative_to(workspace.root)).as_posix()
+    except ValueError:
+        raise WorkspaceError("Path is outside the workspace") from None
+
+
 def git_status(workspace: Workspace) -> str:
     """Short branch and change summary, without protected paths."""
     return _run(workspace, ["status", "--short", "--branch", "--", ".", *_EXCLUDES]) or "Clean."
@@ -79,12 +90,25 @@ def git_diff(workspace: Workspace, path: str | None = None, staged: bool = False
     args = ["diff", "--no-ext-diff", "--no-textconv", "--no-color"]
     if staged:
         args.append("--cached")
-    target = "."
-    if path:
-        resolved = (workspace.root / path).resolve()
-        try:
-            relative = resolved.relative_to(workspace.root)
-        except ValueError:
-            raise WorkspaceError("Path is outside the workspace") from None
-        target = Path(relative).as_posix()
+    target = _relative_target(workspace, path)
     return _run(workspace, [*args, "--", target, *_EXCLUDES]) or "No differences."
+
+
+def git_log(workspace: Workspace, limit: int = 20, path: str | None = None) -> str:
+    """Recent commits as hash, relative date, author and subject; no diffs or file contents."""
+    count = max(1, min(int(limit), MAX_LOG_COMMITS))
+    args = [
+        "log",
+        f"--max-count={count}",
+        "--date=relative",
+        "--no-color",
+        "--format=%h | %ad | %an | %s",
+    ]
+    target = _relative_target(workspace, path)
+    try:
+        return _run(workspace, [*args, "--", target, *_EXCLUDES]) or "No commits."
+    except WorkspaceError:
+        # `git log` fails on a repository with no commits; status tells those apart.
+        if "No commits yet" in git_status(workspace):
+            return "No commits yet."
+        raise
