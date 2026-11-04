@@ -228,11 +228,20 @@ def _read_prompt(status: Callable[[], list[Any]]) -> str:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return input().strip()
     from prompt_toolkit import PromptSession
+    from prompt_toolkit.application import get_app
+    from prompt_toolkit.filters import Condition
 
-    from code_harness.ui import prompt_style
+    from code_harness.ui import prompt_style, slash_completer
 
     if _prompt_session is None:
-        _prompt_session = PromptSession(style=prompt_style(), erase_when_done=True)
+        # Only complete on `/`: otherwise the menu's reserved space sits above the status bar.
+        typing_command = Condition(lambda: get_app().current_buffer.text.startswith("/"))
+        _prompt_session = PromptSession(
+            style=prompt_style(),
+            erase_when_done=True,
+            completer=slash_completer(),
+            complete_while_typing=typing_command,
+        )
     reply = _prompt_session.prompt(
         [("fg:ansibrightgreen bold", "> ")],
         bottom_toolbar=status,

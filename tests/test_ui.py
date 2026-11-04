@@ -254,3 +254,63 @@ def test_terminal_prompt_reads_input_and_renders_status(monkeypatch) -> None:
         pipe.send_text("  hello world \r")
         assert cli._read_prompt(status) == "hello world"
     assert asked  # the status bar was rendered
+
+
+def test_slash_completer_filters_and_describes() -> None:
+    from prompt_toolkit.completion import CompleteEvent
+    from prompt_toolkit.document import Document
+
+    completer = ui.slash_completer()
+
+    def names(text: str) -> list[str]:
+        return [c.text for c in completer.get_completions(Document(text), CompleteEvent())]
+
+    assert len(names("/")) == len(ui.SLASH_COMMANDS)
+    assert names("/mo") == ["/model"]
+    assert names("/approve") == ["/approve", "/approve ask"]
+    assert names("hello") == [] and names("/nope") == []
+
+
+def test_every_hinted_command_is_handled_by_chat() -> None:
+    from pathlib import Path
+
+    from code_harness import cli
+
+    source = Path(cli.__file__).read_text(encoding="utf-8")
+    for command, _ in ui.SLASH_COMMANDS:
+        assert f'"{command}"' in source, command
+
+
+def test_tab_completes_a_slash_command_at_the_terminal(monkeypatch) -> None:
+    import sys
+    import threading
+    import time
+
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    from code_harness import cli
+
+    monkeypatch.setattr(cli, "_prompt_session", None)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True, raising=False)
+    with create_pipe_input() as pipe, create_app_session(input=pipe, output=DummyOutput()):
+        # Like a person: type, see the menu appear, press Tab, then Enter.
+        def keys() -> None:
+            pipe.send_text("/cha")
+            time.sleep(0.4)
+            menu = cli._prompt_session.default_buffer.complete_state
+            shown.extend(item.text for item in menu.completions if menu)
+            pipe.send_text("\t")
+            time.sleep(0.2)
+            pipe.send_text("\r")
+
+        shown: list[str] = []
+        typist = threading.Thread(target=keys)
+        typist.start()
+        try:
+            assert cli._read_prompt(list) == "/changes"
+        finally:
+            typist.join()
+        assert shown == ["/changes"]

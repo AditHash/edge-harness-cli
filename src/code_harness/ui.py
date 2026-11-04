@@ -194,5 +194,45 @@ def prompt_style() -> Any:
             "bottom-toolbar": "noreverse bg:default",
             "bottom-toolbar.text": "noreverse",
             "placeholder": "fg:ansibrightblack",
+            "completion-menu.completion": "bg:ansibrightblack fg:ansiwhite",
+            "completion-menu.completion.current": "bg:ansicyan fg:ansiblack bold",
+            "completion-menu.meta.completion": "bg:ansibrightblack fg:ansiwhite",
+            "completion-menu.meta.completion.current": "bg:ansicyan fg:ansiblack",
         }
     )
+
+
+SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
+    ("/help", "list commands"),
+    ("/model", "show the model and route; /model <id> switches"),
+    ("/context", "context used vs the model's window"),
+    ("/usage", "session token totals"),
+    ("/compact", "summarize older messages now"),
+    ("/plan", "show the task plan"),
+    ("/changes", "files changed this session"),
+    ("/approve", "show approvals"),
+    ("/approve ask", "ask every time again"),
+    ("/sessions", "list saved sessions"),
+    ("/resume", "/resume <id> switches session"),
+    ("/new", "start a new session"),
+    ("/clear", "start a new session"),
+    ("/status", "workspace and session id"),
+    ("/exit", "leave"),
+    ("/quit", "leave"),
+)
+
+
+def slash_completer() -> Any:
+    """Menu of slash commands; only active while the input starts with `/`."""
+    from prompt_toolkit.completion import Completer, Completion
+
+    class SlashCompleter(Completer):
+        def get_completions(self, document: Any, complete_event: Any) -> Any:
+            text = document.text_before_cursor
+            if not text.startswith("/"):
+                return
+            for command, description in SLASH_COMMANDS:
+                if command.startswith(text):
+                    yield Completion(command, start_position=-len(text), display_meta=description)
+
+    return SlashCompleter()
