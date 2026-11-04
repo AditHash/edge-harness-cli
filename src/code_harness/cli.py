@@ -292,7 +292,7 @@ class _ReplyView:
         self.text = ""
 
 
-async def _show_turn(agent: object, prompt: str, tracker: UsageTracker | None = None) -> None:
+async def _show_turn(agent: object, prompt: Any, tracker: UsageTracker | None = None) -> None:
     meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
     reply = _ReplyView()
     changes_before = len(SESSION_CHANGES)
@@ -444,6 +444,37 @@ def _make_agent(
     )
 
 
+def _attach_image(
+    command: str, pending: list[Any], settings: Settings, model: str | None
+) -> str | None:
+    """Handle /image; returns a message to send now, or None when there is nothing to send."""
+    from code_harness.catalog import supports_images
+    from code_harness.images import MAX_PENDING_IMAGES, load_image, split_image_command
+
+    path, message = split_image_command(command.removeprefix("/image"))
+    if not path:
+        names = ", ".join(image.name for image in pending) or "none"
+        console.print(f"Attached images: {names}. Use /image <path> [message].", markup=False)
+        return None
+    if len(pending) >= MAX_PENDING_IMAGES:
+        console.print(f"At most {MAX_PENDING_IMAGES} images per message.")
+        return None
+    try:
+        image = load_image(path, settings.workspace)
+    except WorkspaceError as exc:
+        console.print(str(exc), markup=False)
+        return None
+    pending.append(image)
+    size = f"{len(image.data) / 1024:,.0f} KB"
+    console.print(f"[dim]Attached {escape(image.name)} ({image.image_format}, {size}).[/dim]")
+    if model and model != "auto" and not supports_images(model):
+        console.print(f"[yellow]{escape(model)} is not known to read images.[/yellow]")
+    if not message:
+        console.print("[dim]Type your message to send it with the image.[/dim]")
+        return None
+    return message
+
+
 def _load_guidance(
     settings: Settings, project_instructions: bool, skills: list[str]
 ) -> list[Guidance]:
@@ -577,6 +608,7 @@ def chat(
         settings = Settings(workspace=workspace)
         current_model = settings.bedrock_model_id
         guidance = _load_guidance(settings, project_instructions, skill or [])
+        pending_images: list[Any] = []
         selected_skills = list(skill or [])
         connected_servers: list[str] = []
         mcp_tools = _open_mcp(stack, mcp_config, settings, mcp, connected_servers)
@@ -606,11 +638,16 @@ def chat(
                 break
             if prompt:
                 console.print(user_bar(prompt))
+            if prompt == "/image" or prompt.startswith("/image "):
+                message = _attach_image(prompt, pending_images, settings, current_model)
+                if message is None:
+                    continue
+                prompt = message
             if prompt in {"/exit", "/quit"}:
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /skills  /skill NAME  /mcp  /approve [ask]  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /image PATH  /skills  /skill NAME  /mcp  /approve [ask]  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -749,7 +786,11 @@ def chat(
                 console.print("Unknown command. Type /help to see available commands.")
             elif prompt:
                 try:
-                    asyncio.run(_show_turn(agent, prompt, tracker))
+                    content: Any = prompt
+                    if pending_images:
+                        content = [*(i.block() for i in pending_images), {"text": prompt}]
+                        pending_images.clear()
+                    asyncio.run(_show_turn(agent, content, tracker))
                     sessions.record_turn(session_id, prompt)
                 except KeyboardInterrupt:
                     console.print("\nTurn cancelled.")

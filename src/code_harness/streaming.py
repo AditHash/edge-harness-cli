@@ -39,7 +39,7 @@ def _model_id(agent: Any) -> str:
     return model_id if isinstance(model_id, str) else ""
 
 
-async def stream_turn(agent: Any, prompt: str) -> AsyncIterator[AgentEvent]:
+async def stream_turn(agent: Any, prompt: Any) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
     manager = getattr(agent, "conversation_manager", None)
     removed_before = getattr(manager, "removed_message_count", 0)

@@ -42,6 +42,7 @@ Inside chat
   /compact              summarize older messages
   /plan                 show task plan
   /changes              files changed this session
+  /image <path> [text]  attach an image to your next message
   /skills               list available skills
   /skill <name>         load a skill into this chat
   /mcp                  saved MCP servers and connection state

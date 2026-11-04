@@ -273,6 +273,7 @@ SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/compact", "summarize older messages now"),
     ("/plan", "show the task plan"),
     ("/changes", "files changed this session"),
+    ("/image", "/image <path> [message] attaches a picture"),
     ("/skills", "list skills in this repo and your global folder"),
     ("/skill", "/skill <name> loads a skill into this chat"),
     ("/mcp", "saved MCP servers; /mcp connect <name> connects one"),
