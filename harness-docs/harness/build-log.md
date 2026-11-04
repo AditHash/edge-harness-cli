@@ -205,3 +205,10 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Tests: default 213 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 222 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
 - Live (ap-south-1): Kimi K3 and Haiku 4.5 each ran two `explore` subagents in one response and combined the reports. An `edit` subagent with piped stdin was refused at approval and the file stayed unchanged. Asked for a broad audit of a two-file repo, Kimi K3 did the work itself and spawned nothing.
 - Not exercised live: approving a subagent's edit at a terminal, `test` role commands, Ctrl-C during a running subagent (the stop signal is covered by unit tests only), `--tui`.
+
+## 2026-11-04 - Dynamic subagent count
+
+- Removed the fixed per-turn count. `HARNESS_SUBAGENT_MAX_PARALLEL` (default 8) queues extras, and `HARNESS_SUBAGENT_TURN_TOKENS` (default 2,000,000 uncached, `0` for no cap) stops new and queued subagents.
+- Tests: default 216 passed, 14 skipped; `HARNESS_TEST_WSL=1`: 225 passed, 5 skipped (POSIX-only). Ruff and mypy clean.
+- Live (ap-south-1, before the queued-budget check): Haiku 4.5 spawned 12 `explore` subagents in one response; 12 finished, 0 failed, correct combined answer, 8s, 34,497 in / 2,360 out. The budget stop has not been hit on a real model.
+- One `HARNESS_TEST_WSL=1` run right after the default suite had 3 failures (names not captured); the next two runs on the same code had none. Cause unknown, so a WSL test may be flaky.
