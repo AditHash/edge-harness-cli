@@ -268,7 +268,7 @@ def test_cli_lists_and_resumes_workspace_session(
     match = re.search(r"Session: ([a-f0-9]{32})", first.output)
     assert match is not None
     session_id = match.group(1)
-    assert first.output.count(session_id) >= 2
+    assert session_id[:8] in first.output.split("Sessions in this folder")[1]
     second = runner.invoke(
         cli.app,
         ["chat", "--workspace", str(root), "--resume", session_id],
@@ -302,3 +302,52 @@ def test_cli_model_switch_is_explicit_and_preserves_session(
     assert result.exit_code == 0
     assert models[-1] == "us.example-v1"
     assert "Model: us.example-v1" in result.output
+
+
+def test_session_details_titles_order_and_prefix(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    sessions = Sessions(tmp_path / "state" / "sessions.sqlite", workspace)
+    first, empty, second = sessions.create(), sessions.create(), sessions.create()
+    sessions.record_turn(first, "fix the\nlogin\x1b[2J bug " + "x" * 100)
+    sessions.record_turn(second, "second task")
+    sessions.record_turn(second, "follow up")
+    infos = sessions.details()
+    assert infos[0].session_id == second
+    assert {info.session_id for info in infos} == {first, second}  # empty one hidden
+    by_id = {info.session_id: info for info in infos}
+    assert by_id[second].turns == 2 and by_id[second].title == "second task"
+    title = by_id[first].title
+    assert title.startswith("fix the login") and "\x1b" not in title and len(title) == 60
+    assert empty in {info.session_id for info in sessions.details(empty)}
+    assert sessions.latest() == second
+    assert sessions.resolve(second[:8]) == second
+    with pytest.raises(WorkspaceError):
+        sessions.resolve("zz")
+    with pytest.raises(WorkspaceError):
+        sessions.resolve("ffffffff" if not second.startswith("ffffffff") else "eeeeeeee")
+
+
+def test_session_details_are_workspace_scoped_and_survive_bad_meta(tmp_path: Path) -> None:
+    database = tmp_path / "state" / "sessions.sqlite"
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    one = Sessions(database, tmp_path / "a")
+    other = Sessions(database, tmp_path / "b")
+    mine = one.create()
+    one.record_turn(mine, "secret plan")
+    assert other.details() == [] and other.latest() is None
+    with pytest.raises(WorkspaceError):
+        other.resolve(mine[:8])
+    one.storage._write(f"meta/{mine}", b"{not json")
+    assert one._load_info(mine).turns == 0
+
+
+def test_older_sessions_without_metadata_stay_listed(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    sessions = Sessions(tmp_path / "state" / "sessions.sqlite", workspace)
+    old = sessions.create()
+    sessions.storage._write(f"session/{old}/scopes/agent/coding-agent/snapshot.json", b"{}")
+    assert [info.session_id for info in sessions.details()] == [old]
+    assert sessions.latest() is None

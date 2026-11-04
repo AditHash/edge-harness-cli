@@ -1,8 +1,11 @@
 """SQLite storage for Strands snapshots and workspace-scoped session metadata."""
 
 import asyncio
+import json
 import sqlite3
+import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +14,8 @@ from strands.session import SnapshotSessionManager
 from strands.storage.storage import Storage
 
 from code_harness.workspace import WorkspaceError, _protected
+
+MAX_TITLE_CHARS = 60
 
 
 class SQLiteStorage(Storage):
@@ -77,6 +82,14 @@ class CompletedTurnSessionManager(SnapshotSessionManager):
             await super()._on_after_invocation(event)
 
 
+@dataclass(frozen=True)
+class SessionInfo:
+    session_id: str
+    title: str
+    updated: float
+    turns: int
+
+
 class Sessions:
     """Keep session selection bound to one canonical workspace."""
 
@@ -98,6 +111,60 @@ class Sessions:
         session_id = uuid.uuid4().hex
         self.storage._write(f"workspace/{session_id}", self.workspace.encode("utf-8"))
         return session_id
+
+    def _load_info(self, session_id: str) -> SessionInfo:
+        raw = self.storage._read(f"meta/{session_id}")
+        try:
+            data = json.loads(raw) if raw else {}
+            return SessionInfo(
+                session_id,
+                str(data.get("title", "")),
+                float(data.get("updated", 0)),
+                int(data.get("turns", 0)),
+            )
+        except (ValueError, TypeError, AttributeError):
+            return SessionInfo(session_id, "", 0.0, 0)
+
+    def record_turn(self, session_id: str, prompt: str) -> None:
+        """Note a finished turn; the first prompt becomes the session's title."""
+        info = self._load_info(session_id)
+        clean = " ".join("".join(ch if ch.isprintable() else " " for ch in prompt).split())
+        title = info.title or clean[:MAX_TITLE_CHARS]
+        record = {"title": title, "updated": time.time(), "turns": info.turns + 1}
+        self.storage._write(f"meta/{session_id}", json.dumps(record).encode("utf-8"))
+
+    def details(self, include: str | None = None) -> list[SessionInfo]:
+        """Sessions with at least one turn (plus `include`), most recent first.
+
+        Sessions older than this metadata have no record; they stay listed, with no title.
+        """
+        infos = [self._load_info(session_id) for session_id in self.list()]
+        kept = [
+            info
+            for info in infos
+            if info.turns
+            or info.session_id == include
+            or self.storage._list(f"session/{info.session_id}/")
+        ]
+        return sorted(kept, key=lambda info: (-info.updated, info.session_id))
+
+    def latest(self) -> str | None:
+        """The most recently used session with recorded turns in this workspace."""
+        recorded = [info for info in self.details() if info.turns]
+        return recorded[0].session_id if recorded else None
+
+    def resolve(self, prefix: str) -> str:
+        """Turn a full id or a unique prefix of at least 4 characters into a session id."""
+        if len(prefix) == 32:
+            return prefix
+        if len(prefix) < 4 or any(ch not in "0123456789abcdef" for ch in prefix):
+            raise WorkspaceError("Invalid session ID")
+        matches = [session_id for session_id in self.list() if session_id.startswith(prefix)]
+        if not matches:
+            raise WorkspaceError("Session does not exist in this workspace")
+        if len(matches) > 1:
+            raise WorkspaceError("Session ID prefix matches more than one session")
+        return matches[0]
 
     def require(self, session_id: str) -> None:
         if len(session_id) != 32 or any(ch not in "0123456789abcdef" for ch in session_id):
