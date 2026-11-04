@@ -198,6 +198,16 @@ def test_token_budget_stops_new_spawns_until_next_turn(tmp_path: Path) -> None:
     assert "budget" not in run("explore", "task")
 
 
+def test_budget_also_stops_subagents_already_queued(tmp_path: Path) -> None:
+    script = Script(main=[[spawn("explore") for _ in range(6)], "ok"])
+    settings = Settings(
+        workspace=tmp_path, harness_subagent_turn_tokens=24, harness_subagent_max_parallel=1
+    )
+    run_turn(create_agent(settings, model=script.model()))
+    assert len(script.sub_tools) == 2
+    assert "budget is used" in script.main_requests[-1]
+
+
 def test_number_of_subagents_is_not_limited(tmp_path: Path) -> None:
     script = Script(main=[[spawn("explore") for _ in range(25)], "ok"])
     run_turn(create_agent(Settings(workspace=tmp_path), model=script.model()))

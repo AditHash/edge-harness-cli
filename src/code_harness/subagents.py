@@ -19,6 +19,7 @@ from code_harness.streaming import stream_turn
 from code_harness.usage import SubagentLedger
 
 MAX_RESULT_CHARS = 20_000
+BUDGET_USED = "Subagent not started: this turn's subagent token budget is used. Do it yourself."
 
 _BASE_PROMPT = """You are a subagent working on one task for a coding assistant. You cannot see its
 conversation, and only your final message is returned, so make that message a complete report.
@@ -58,12 +59,13 @@ def build_spawn_tool(
             return "Subagent not started: the task is empty."
         label = ledger.reserve(role)
         if label is None:
-            return (
-                "Subagent not started: this turn's subagent token budget is used. Do it yourself."
-            )
+            return BUDGET_USED
         with slots:
             if ledger.stop.is_set():
                 return f"Subagent {label} cancelled before it started."
+            # A queued subagent may have waited while others used up the budget.
+            if ledger.budget_used():
+                return BUDGET_USED
             return _run_subagent(model, definition, task, label, ledger, notify)
 
     return spawn_subagent
