@@ -24,7 +24,6 @@ from code_harness.approvals import (
     review_fetch,
     review_mcp,
     review_proposal,
-    review_search,
 )
 from code_harness.config import Settings
 from code_harness.instructions import Guidance, load_guidance
@@ -42,7 +41,6 @@ from code_harness.ui import (
     user_bar,
 )
 from code_harness.usage import UsageTracker
-from code_harness.web import WebReview
 from code_harness.workspace import Workspace, WorkspaceError
 
 app = typer.Typer(no_args_is_help=True, help="A local-first coding assistant.")
@@ -432,16 +430,6 @@ def _make_agent(
             read_reply=ui.read_reply,
         )
 
-    def search_review(query: str) -> bool:
-        ui = io()
-        return review_search(
-            query,
-            interactive=ui.interactive,
-            display=ui.display,
-            read_reply=ui.read_reply,
-            session=SESSION_APPROVALS,
-        )
-
     def fetch_review(url: str) -> bool:
         ui = io()
         return review_fetch(
@@ -463,7 +451,7 @@ def _make_agent(
         guidance=guidance,
         mcp_tools=mcp_tools,
         mcp_review=mcp_review if mcp_tools else None,
-        review_web=WebReview(search_review, fetch_review),
+        review_web=fetch_review,
         # Subagent progress carries model text, so it is never parsed as markup. A TUI owns the
         # screen, so console output there would corrupt it.
         notify=(lambda text: None)

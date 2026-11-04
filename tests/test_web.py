@@ -8,9 +8,9 @@ from test_subagents import Script, run_turn, spawn
 
 from code_harness import web
 from code_harness.agent import create_agent
-from code_harness.approvals import SessionApprovals, review_fetch, review_search
+from code_harness.approvals import SessionApprovals, review_fetch
 from code_harness.config import Settings
-from code_harness.web import WebError, WebReview, build_web_tools, fetch_page, validate_url
+from code_harness.web import WebError, build_web_fetch, fetch_page, validate_url
 
 PUBLIC = "93.184.216.34"
 
@@ -144,38 +144,33 @@ def test_tls_verification_stays_on() -> None:
     assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
 
 
-def _tools(search: bool = True, fetch: bool = True) -> tuple[Any, Any, Any]:
-    review = WebReview(MagicMock(return_value=search), MagicMock(return_value=fetch))
-    found = {t.tool_name: t._tool_func for t in build_web_tools(review, threading.Lock())}
-    return found["web_search"], found["web_fetch"], review
+def _fetch_tool(approve: bool = True) -> tuple[Any, MagicMock]:
+    review = MagicMock(return_value=approve)
+    return build_web_fetch(review, threading.Lock())._tool_func, review
 
 
 def test_refused_requests_reach_no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web, "_resolve", public)
     monkeypatch.setattr(web, "fetch_page", MagicMock(side_effect=AssertionError("network")))
-    exa = MagicMock(side_effect=AssertionError("network"))
-    monkeypatch.setattr(web, "make_exa_web_search", lambda: exa)
-    search, fetch, _ = _tools(search=False, fetch=False)
-    assert "did not approve" in search("python news")
-    assert "not run" in search("bad\x1b[2Jquery")
+    fetch, _ = _fetch_tool(approve=False)
+    assert "did not approve" in fetch("https://example.com/")
     assert "not run" in fetch("file:///etc/passwd")
 
 
 def test_private_url_is_refused_before_asking_the_user() -> None:
-    _, fetch, review = _tools()
+    fetch, review = _fetch_tool()
     assert "public address" in fetch("http://127.0.0.1:8080/secrets")
     assert "public address" in fetch("http://169.254.169.254/latest/meta-data/")
-    review.fetch.assert_not_called()
+    review.assert_not_called()
 
 
-def test_web_results_are_marked_untrusted(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def exa(query: str, max_results: int) -> str:
-        return f"Sources: {query}"
-
-    monkeypatch.setattr(web, "make_exa_web_search", lambda: exa)
-    search, _, review = _tools()
-    assert search("python news").startswith(web.UNTRUSTED)
-    review.search.assert_called_once_with("python news")
+def test_fetched_pages_are_marked_untrusted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(web, "_resolve", public)
+    monkeypatch.setattr(web, "fetch_page", lambda url: (url, "page text"))
+    fetch, review = _fetch_tool()
+    result = fetch("https://example.com/")
+    assert result.startswith(web.UNTRUSTED) and "page text" in result
+    review.assert_called_once_with("https://example.com/")
 
 
 def _ask(reply: str) -> dict[str, Any]:
@@ -187,7 +182,6 @@ def test_standing_fetch_approval_covers_one_host_only() -> None:
     assert review_fetch("https://a.example/1", session=session, **_ask("a"))
     assert review_fetch("https://a.example/2?x=1", session=session, **_ask("no"))
     assert not review_fetch("https://b.example/", session=session, **_ask("no"))
-    assert not session.searches
     assert "a.example" in session.describe()
     session.reset()
     assert not review_fetch("https://a.example/1", session=session, **_ask("no"))
@@ -195,34 +189,31 @@ def test_standing_fetch_approval_covers_one_host_only() -> None:
 
 def test_edit_and_command_approvals_do_not_cover_the_web() -> None:
     session = SessionApprovals(edits=True, commands=True)
-    assert not review_search("q", session=session, **_ask(""))
     assert not review_fetch("https://a.example/", session=session, **_ask(""))
-    assert review_search("q", session=session, **_ask("all"))
-    assert session.searches and review_search("q2", session=session, **_ask("no"))
 
 
 def test_web_is_refused_without_a_terminal() -> None:
-    session = SessionApprovals(searches=True, web_hosts={"a.example"})
+    session = SessionApprovals(web_hosts={"a.example"})
     quiet = {"interactive": False, "display": print, "read_reply": lambda text: "yes"}
-    assert not review_search("q", session=session, **quiet)
     assert not review_fetch("https://a.example/", session=session, **quiet)
 
 
-def test_only_explore_subagents_get_web_tools(tmp_path: Path) -> None:
+def test_only_explore_subagents_get_web_fetch_and_nothing_can_search(tmp_path: Path) -> None:
     script = Script(main=[[spawn("explore"), spawn("review")], "ok"], sub=["a", "b"])
-    review_web = WebReview(MagicMock(return_value=False), MagicMock(return_value=False))
+    review_web = MagicMock(return_value=False)
     agent = create_agent(Settings(workspace=tmp_path), model=script.model(), review_web=review_web)
-    assert {"web_search", "web_fetch"} <= set(agent.tool_registry.registry)
+    assert "web_fetch" in agent.tool_registry.registry
+    assert "web_search" not in agent.tool_registry.registry
+    assert "web_search" not in str(agent.system_prompt)
     run_turn(agent)
-    with_web = [names for names in script.sub_tools if "web_fetch" in names]
-    assert len(with_web) == 1 and "web_search" in with_web[0]
+    assert sum("web_fetch" in names for names in script.sub_tools) == 1
+    assert not any("web_search" in names for names in script.sub_tools)
 
 
 def test_web_needs_review_and_can_be_disabled(tmp_path: Path) -> None:
     model = Script(main=[]).model()
     agent = create_agent(Settings(workspace=tmp_path), model=model)
     assert "web_fetch" not in agent.tool_registry.registry
-    review_web = WebReview(MagicMock(), MagicMock())
     settings = Settings(workspace=tmp_path, harness_enable_web=False)
-    agent = create_agent(settings, model=model, review_web=review_web)
+    agent = create_agent(settings, model=model, review_web=MagicMock())
     assert "web_fetch" not in agent.tool_registry.registry
