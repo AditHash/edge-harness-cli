@@ -29,6 +29,14 @@ TIER_LABELS = {
     "mumbai": "Mumbai in-region (ap-south-1 on-demand)",
 }
 
+# From the AWS Bedrock model cards (docs.aws.amazon.com/bedrock/latest/userguide/model-card-*).
+CONTEXT_AWS_DOCS: dict[str, int] = {
+    "in.moonshotai.kimi-k3": 1_000_000,
+    "moonshotai.kimi-k3": 1_000_000,
+    "us.moonshotai.kimi-k3": 1_000_000,
+    "global.moonshotai.kimi-k3": 1_000_000,
+}
+
 # Provider-published context lengths for models the SDK table does not cover. Estimates only.
 CONTEXT_ESTIMATES: dict[str, int] = {
     "qwen.qwen3-coder-480b-a35b-v1:0": 262_144,
@@ -67,7 +75,7 @@ class CatalogModel:
     tier: str
     provider: str
     context: int | None
-    context_source: str  # "sdk", "estimate" or "unknown"
+    context_source: str  # "sdk", "aws-docs", "estimate" or "unknown"
     tools: str  # "ok", "failed" (no tool call), "no_access" or "untested"
 
 
@@ -90,6 +98,8 @@ def context_for(model_id: str) -> tuple[int | None, str]:
     known = sdk_context(model_id)
     if known:
         return known, "sdk"
+    if model_id in CONTEXT_AWS_DOCS:
+        return CONTEXT_AWS_DOCS[model_id], "aws-docs"
     if model_id in CONTEXT_ESTIMATES:
         return CONTEXT_ESTIMATES[model_id], "estimate"
     return None, "unknown"

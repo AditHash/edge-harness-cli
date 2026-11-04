@@ -40,7 +40,7 @@ def test_build_ranks_tier_then_tools_then_context() -> None:
     qwen = next(m for m in models if m.model_id.startswith("qwen.qwen3-coder-480b"))
     assert (qwen.context, qwen.context_source) == (262_144, "estimate")
     kimi = next(m for m in models if m.model_id == "in.moonshotai.kimi-k3")
-    assert kimi.context_source == "unknown"
+    assert (kimi.context, kimi.context_source) == (1_000_000, "aws-docs")
     mumbai = [m.model_id for m in models if m.tier == "mumbai"]
     assert mumbai.index("qwen.qwen3-coder-480b-a35b-v1:0") < mumbai.index(
         "meta.llama3-8b-instruct-v1:0"
@@ -216,10 +216,24 @@ def test_unknown_context_model_gets_cautious_limit_and_no_warning(tmp_path: Path
 
     agent = create_agent(
         Settings(
-            workspace=tmp_path, bedrock_model_id="in.moonshotai.kimi-k3", aws_region="ap-south-1"
+            workspace=tmp_path,
+            bedrock_model_id="nvidia.nemotron-super-3-120b",
+            aws_region="ap-south-1",
         )
     )
     assert agent.model.context_window_limit == UNKNOWN_CONTEXT_FALLBACK
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert agent.model.estimate_utilization(64_000) == 0.5
+
+
+def test_documented_context_sizes_auto_compaction(tmp_path: Path) -> None:
+    from code_harness.agent import create_agent
+    from code_harness.config import Settings
+
+    agent = create_agent(
+        Settings(
+            workspace=tmp_path, bedrock_model_id="in.moonshotai.kimi-k3", aws_region="ap-south-1"
+        )
+    )
+    assert agent.model.context_window_limit == 1_000_000

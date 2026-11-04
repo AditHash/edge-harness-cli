@@ -152,7 +152,8 @@ def print_catalog(models: list, residency: str) -> None:
     for tier in allowed:
         console.print(f"{tier}: {TIER_LABELS[tier]}", markup=False)
     console.print(
-        "context source: sdk = Strands model table; estimate = provider-published, Bedrock may "
+        "context source: sdk = Strands model table; aws-docs = AWS model card; "
+        "estimate = provider-published, Bedrock may "
         "serve less. tools: ok/failed from a recorded probe; untested = not checked yet.",
         markup=False,
     )

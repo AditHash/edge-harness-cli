@@ -39,7 +39,7 @@ def _bedrock(settings: Settings, model_id: str, region: str) -> BedrockModel:
 
     extra: dict[str, Any] = {}
     context, source = context_for(model_id)
-    if source == "estimate" and context:
+    if source in {"estimate", "aws-docs"} and context:
         # The SDK does not know this model; size auto-compaction from the published limit.
         extra["context_window_limit"] = context
     elif source == "unknown":
