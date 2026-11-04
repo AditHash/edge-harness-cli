@@ -494,3 +494,62 @@ def test_max_tokens_is_configurable_and_failure_is_actionable(tmp_path: Path) ->
     assert Settings(workspace=tmp_path, bedrock_max_tokens=4096).bedrock_max_tokens == 4096
     message = _failure_message(MaxTokensReachedException("secret provider text"))
     assert "output limit" in message and "secret" not in message
+
+
+def test_parallel_edits_are_reviewed_one_at_a_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+    import time
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "a.txt").write_bytes(b"one\ntwo\n")
+    state = {"calls": 0, "active": 0, "peak": 0}
+    guard = threading.Lock()
+
+    async def model_stream(messages, *args, **kwargs):
+        state["calls"] += 1
+        yield {"messageStart": {"role": "assistant"}}
+        if state["calls"] == 1:
+            edits = [("one\n", "ONE\n"), ("two\n", "TWO\n")]
+            for index, (old, new) in enumerate(edits):
+                start = {"toolUseId": f"e{index}", "name": "replace_in_file"}
+                arguments = {"path": "a.txt", "old_text": old, "new_text": new}
+                yield {"contentBlockStart": {"start": {"toolUse": start}}}
+                yield {
+                    "contentBlockDelta": {"delta": {"toolUse": {"input": json.dumps(arguments)}}}
+                }
+                yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            yield {"contentBlockDelta": {"delta": {"text": "Done"}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+        usage = {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2}
+        yield {"metadata": {"usage": usage, "metrics": {"latencyMs": 1}}}
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.estimate_utilization.return_value = 0.0
+    model.stream.side_effect = model_stream
+
+    def review(proposal) -> bool:
+        with guard:
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+        time.sleep(0.2)
+        with guard:
+            state["active"] -= 1
+        return True
+
+    agent = create_agent(Settings(workspace=root), model=model, review=review)
+
+    async def run():
+        return [event async for event in stream_turn(agent, "edit twice")]
+
+    asyncio.run(run())
+    assert state["peak"] == 1  # never two approval prompts at once
+    assert (root / "a.txt").read_bytes() == b"ONE\nTWO\n"  # second diff built on the first edit
