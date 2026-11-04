@@ -1,0 +1,48 @@
+"""Bedrock prices in US dollars per million tokens, ap-south-1, standard on-demand.
+
+Generated from the AWS Price List API. Refresh at runtime with `edge-harness --refresh-prices`.
+"""
+
+TAKEN = "2026-11-04"
+PRICES: dict[str, dict[str, float]] = {
+    "deepseek.v3-v1:0": {"input": 0.682424, "output": 1.976678},
+    "deepseek.v3.2": {"input": 0.74, "output": 2.22},
+    "google.gemma-3-12b-it": {"input": 0.11, "output": 0.34},
+    "google.gemma-3-27b-it": {"input": 0.27, "output": 0.45},
+    "google.gemma-3-4b-it": {"input": 0.05, "output": 0.09},
+    "in.anthropic.claude-haiku-4-5-20251001-v1:0": {"cached": 0.11, "input": 1.1, "output": 5.5},
+    "in.anthropic.claude-opus-5": {"cached": 0.55, "input": 5.5, "output": 27.5},
+    "in.anthropic.claude-sonnet-5": {"cached": 0.22, "input": 2.2, "output": 11.0},
+    "in.moonshotai.kimi-k3": {"cached": 0.33, "input": 3.3, "output": 16.5},
+    "meta.llama3-70b-instruct-v1:0": {"input": 3.18, "output": 4.2},
+    "meta.llama3-8b-instruct-v1:0": {"input": 0.36, "output": 0.72},
+    "minimax.minimax-m2": {"input": 0.35, "output": 1.41},
+    "minimax.minimax-m2.1": {"input": 0.36, "output": 1.44},
+    "minimax.minimax-m2.5": {"input": 0.36, "output": 1.44},
+    "mistral.devstral-2-123b": {"input": 0.48, "output": 2.4},
+    "mistral.magistral-small-2509": {"input": 0.59, "output": 1.76},
+    "mistral.ministral-3-14b-instruct": {"input": 0.24, "output": 0.24},
+    "mistral.ministral-3-3b-instruct": {"input": 0.12, "output": 0.12},
+    "mistral.ministral-3-8b-instruct": {"input": 0.18, "output": 0.18},
+    "mistral.mistral-7b-instruct-v0:2": {"input": 0.18, "output": 0.24},
+    "mistral.mistral-large-2402-v1:0": {"input": 4.8, "output": 14.4},
+    "mistral.mistral-large-3-675b-instruct": {"input": 0.59, "output": 1.76},
+    "mistral.mixtral-8x7b-instruct-v0:1": {"input": 0.54, "output": 0.84},
+    "moonshot.kimi-k2-thinking": {"input": 0.71, "output": 2.94},
+    "moonshotai.kimi-k2.5": {"input": 0.72, "output": 3.6},
+    "nvidia.nemotron-nano-12b-v2": {"input": 0.24, "output": 0.71},
+    "nvidia.nemotron-nano-3-30b": {"input": 0.07, "output": 0.28},
+    "nvidia.nemotron-nano-9b-v2": {"input": 0.07, "output": 0.27},
+    "nvidia.nemotron-super-3-120b": {"input": 0.18, "output": 0.78},
+    "openai.gpt-oss-120b-1:0": {"input": 0.18, "output": 0.71},
+    "openai.gpt-oss-20b-1:0": {"input": 0.08, "output": 0.35},
+    "qwen.qwen3-235b-a22b-2507-v1:0": {"input": 0.26, "output": 1.04},
+    "qwen.qwen3-32b-v1:0": {"input": 0.18, "output": 0.71},
+    "qwen.qwen3-coder-30b-a3b-v1:0": {"input": 0.18, "output": 0.71},
+    "qwen.qwen3-coder-480b-a35b-v1:0": {"input": 0.53, "output": 2.12},
+    "qwen.qwen3-next-80b-a3b": {"input": 0.18, "output": 1.41},
+    "qwen.qwen3-vl-235b-a22b": {"input": 0.62, "output": 3.13},
+    "zai.glm-4.7": {"input": 0.72, "output": 2.64},
+    "zai.glm-4.7-flash": {"input": 0.08, "output": 0.48},
+    "zai.glm-5": {"input": 1.2, "output": 3.84},
+}
