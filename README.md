@@ -22,7 +22,7 @@ Setup and a bounded smoke test: [Bedrock guide](harness-docs/docs/BEDROCK.md).
 | Context | Strands summarizing manager; proactive compaction at 70% of context; `/compact` |
 | MCP | local stdio servers inside the sandbox, or remote HTTPS servers; every call separately approved |
 | Planning | `update_plan` tool, `/plan` view, persisted in session state |
-| Subagents (on by default) | `spawn_subagent`: `explore`, `review`, `test`, `edit` roles; one level deep, up to 3 at once and 8 per turn |
+| Subagents (on by default) | `spawn_subagent`: `explore`, `review`, `test`, `edit` roles; as many as the task needs, one level deep, 8 at once by default, 2M tokens per turn by default |
 | Specialists (opt-in) | `explore_repo`, `review_changes` (read-only), `run_tests` (sandbox, approved) |
 | Usage | per-turn tokens, `/usage` session totals, optional cost from user-set prices |
 | Guidance | `--project-instructions`, `--skill NAME`; explicit, never executed |
@@ -127,7 +127,7 @@ uv run harness ask "Explain the architecture" --workspace C:\path\to\repo
 
 Settings (environment variables): `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`, `BEDROCK_MAX_TOKENS`,
 `SANDBOX_WSL_DISTRIBUTION`, `HARNESS_STATE_DIR` (default `~/.edge-harness`),
-`HARNESS_ENABLE_SUBAGENTS` (default `true`), `HARNESS_ENABLE_EXPLORER`, `HARNESS_ENABLE_REVIEWER`, `HARNESS_ENABLE_TESTER` (all `true`/`false`),
+`HARNESS_ENABLE_SUBAGENTS` (default `true`), `HARNESS_SUBAGENT_MAX_PARALLEL` (default `8`), `HARNESS_SUBAGENT_TURN_TOKENS` (default `2000000`, `0` for no cap), `HARNESS_ENABLE_EXPLORER`, `HARNESS_ENABLE_REVIEWER`, `HARNESS_ENABLE_TESTER` (all `true`/`false`),
 `INPUT_PRICE_PER_MTOK`, `OUTPUT_PRICE_PER_MTOK`. Full guides: [CLI reference](harness-docs/docs/CLI.md),
 [Bedrock setup](harness-docs/docs/BEDROCK.md), [Security](harness-docs/docs/SECURITY.md),
 [Architecture](harness-docs/ARCHITECTURE.md).

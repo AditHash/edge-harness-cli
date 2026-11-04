@@ -124,5 +124,7 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   hook on the main agent. No subagent has network or host command access.
 - Edits and commands use the main agent's guarded tools and its approval lock, so a subagent cannot
   skip an approval. `approve-all` covers them exactly as it covers the main agent.
-- Limits: 3 at once, 8 per turn, the same turn and output limits as the main agent, and a 20,000
-  character report. Provider errors are reduced to the exception type. Reports are marked untrusted.
+- Limits: the number of subagents is not capped. Up to `HARNESS_SUBAGENT_MAX_PARALLEL` run at once
+  and new spawns stop once `HARNESS_SUBAGENT_TURN_TOKENS` uncached tokens are used in a turn; running
+  subagents finish, so a turn can pass that figure. Each has the main agent's turn and output limits
+  and a 20,000 character report. Provider errors are reduced to the exception type. Reports are marked untrusted.
