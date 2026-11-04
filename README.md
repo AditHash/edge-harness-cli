@@ -68,6 +68,8 @@ their target (`> read_code README.md`), failed tools are red, each model call pr
 line, and every turn ends with a token rule plus a "Changed this turn" table. `/changes` lists all
 approved changes in the session.
 
+At a terminal the input box has a live status bar: model, folder, approval mode, context left, and session tokens. Set `NO_COLOR=1` to turn colors off. Close running sessions before `uv tool install --editable . --force`; on Windows they lock the tool folder.
+
 ## India / Mumbai models and `auto`
 
 ```powershell
