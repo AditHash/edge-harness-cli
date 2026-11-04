@@ -14,6 +14,8 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
+from code_harness.approvals import HOST_PREFIX
+
 CODE_THEME = "monokai"
 THEME = Theme(
     {
@@ -71,6 +73,8 @@ def review_renderable(text: str) -> RenderableType:
         lines = text.splitlines()
         if len(lines) >= 2:
             return command_panel("\n".join(lines[1:-1]) or lines[1])
+    if text.startswith(HOST_PREFIX):
+        return Panel(Text(text), title="REAL machine", border_style="bold red", expand=True)
     if text.startswith("MCP "):
         return Panel(Text(text), title="MCP", border_style="magenta", expand=True)
     return Text(text, style="dim" if text.startswith(("Applied under", "Run under")) else "")

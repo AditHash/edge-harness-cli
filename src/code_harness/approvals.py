@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 from code_harness.proposals import Proposal
 from code_harness.workspace import WorkspaceError
 
+HOST_PREFIX = "Proposed command on your REAL machine:"
+
 
 def validate_reviewable(proposal: Proposal) -> None:
     """Reject controls that could falsify the diff shown in a terminal."""
@@ -42,7 +44,8 @@ class SessionApprovals:
         hosts = ", ".join(sorted(self.web_hosts)) or "none"
         return (
             f"File changes: {edits}. Sandbox commands: {commands}. "
-            f"Web pages approved from: {hosts}. MCP calls: ask each time."
+            f"Web pages approved from: {hosts}. MCP calls: ask each time. "
+            "Real machine commands: type yes each time."
         )
 
 
@@ -135,6 +138,27 @@ def review_fetch(
             session.web_hosts.add(host)
             return True
         return decision == "yes"
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
+
+
+def review_host(
+    command: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+) -> bool:
+    """Approve one command on the real machine. Only a typed `yes` counts, every time."""
+    if not interactive:
+        return False
+    try:
+        display(
+            f"{HOST_PREFIX}\n{command}\n"
+            "NOT sandboxed: it runs with your files, logins and network, and the model reads its "
+            "output. Check it did not come from repository or web content."
+        )
+        return read_reply("Run on your REAL machine? Type yes: ").strip().casefold() == "yes"
     except (EOFError, KeyboardInterrupt, OSError):
         return False
 

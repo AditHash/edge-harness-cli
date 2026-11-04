@@ -22,6 +22,7 @@ from code_harness.approvals import (
     SessionApprovals,
     review_command,
     review_fetch,
+    review_host,
     review_mcp,
     review_proposal,
 )
@@ -440,6 +441,15 @@ def _make_agent(
             session=SESSION_APPROVALS,
         )
 
+    def host_review(command: str) -> bool:
+        ui = io()
+        return review_host(
+            command,
+            interactive=ui.interactive,
+            display=ui.display,
+            read_reply=ui.read_reply,
+        )
+
     settings = Settings(workspace=workspace)
     if model_id is not None:
         settings = settings.model_copy(update={"bedrock_model_id": model_id})
@@ -452,6 +462,7 @@ def _make_agent(
         mcp_tools=mcp_tools,
         mcp_review=mcp_review if mcp_tools else None,
         review_web=fetch_review,
+        review_host=host_review,
         # Subagent progress carries model text, so it is never parsed as markup. A TUI owns the
         # screen, so console output there would corrupt it.
         notify=(lambda text: None)
