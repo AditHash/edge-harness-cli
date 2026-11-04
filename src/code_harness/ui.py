@@ -84,42 +84,133 @@ def review_renderable(text: str) -> RenderableType:
     return Text(text, style="dim" if text.startswith(("Applied under", "Run under")) else "")
 
 
-def changes_table(changes: list[tuple[str, int, int, str]], title: str) -> Table:
-    """Approved file changes with line counts; paths are shown literally."""
+_CHANGE_MARKS = {"created": ("+", "green"), "deleted": ("-", "red"), "edited": ("~", "yellow")}
 
-    table = Table(title=title, title_style="bold", show_edge=False, pad_edge=False)
-    table.add_column("file")
-    table.add_column("change")
-    table.add_column("+", justify="right", style="green")
-    table.add_column("-", justify="right", style="red")
+
+def changes_table(changes: list[tuple[str, int, int, str]], title: str) -> Group:
+    """Approved file changes with line counts; paths are shown literally."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(width=1)
+    grid.add_column()
+    grid.add_column(style="dim")
+    grid.add_column(justify="right", style="green")
+    grid.add_column(justify="right", style="red")
     for path, added, removed, kind in changes:
-        table.add_row(Text(path), kind, str(added), str(removed))
+        symbol, color = _CHANGE_MARKS.get(kind, ("~", "yellow"))
+        grid.add_row(Text(symbol, style=color), Text(path), kind, f"+{added}", f"-{removed}")
+    return Group(Text(title, style="bold"), Padding(grid, (0, 0, 0, 2)))
+
+
+# Plain names for built-in tools, with a color per kind of action. Anything else, such as an MCP
+# tool, keeps its own name.
+_TOOL_LOOK = {
+    "list_repo": ("List files", "bright_cyan"),
+    "read_code": ("Read", "bright_cyan"),
+    "search_code": ("Search", "bright_cyan"),
+    "find_relevant_code": ("Find", "bright_cyan"),
+    "git_status": ("Git status", "bright_cyan"),
+    "git_diff": ("Git diff", "bright_cyan"),
+    "git_log": ("Git log", "bright_cyan"),
+    "update_plan": ("Plan", "bright_blue"),
+    "edit_code": ("Write", "bright_yellow"),
+    "replace_in_file": ("Edit", "bright_yellow"),
+    "delete_code": ("Delete", "bright_yellow"),
+    "run_sandboxed": ("Sandbox", "bright_magenta"),
+    "run_on_host": ("Real machine", "bold bright_red"),
+    "web_fetch": ("Fetch", "bright_blue"),
+    "spawn_subagent": ("Subagent", "bright_green"),
+}
+
+
+def tool_label(name: str) -> str:
+    return _TOOL_LOOK.get(name, (name, ""))[0]
+
+
+def tool_row(summary: str, encoding: str | None) -> Table:
+    """`name target` from the stream as a readable row; the target is shown literally."""
+    name, _, target = summary.partition(" ")
+    label, color = _TOOL_LOOK.get(name, (name, "bright_cyan"))
+    body = Text.assemble((label, f"bold {color}"), " ", (target, "bright_white"))
+    return bullet_row(body, mark(encoding), color)
+
+
+def help_table() -> Table:
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style="bold bright_cyan", no_wrap=True)
+    table.add_column(style="dim")
+    for command, description in SLASH_COMMANDS:
+        table.add_row(command, description)
+    return table
+
+
+def cost_table(tracker: Any) -> RenderableType:
+    """Estimated session cost by model, with the rate and where it came from."""
+    from code_harness.pricing import format_usd
+
+    if not tracker.by_model:
+        return Text("No model calls in this session yet.")
+    table = Table(title="Estimated session cost", title_style="bold", show_edge=False)
+    table.add_column("model", style="cyan")
+    for column in ("in", "cached", "out"):
+        table.add_column(column, justify="right")
+    table.add_column("cost", justify="right", style="bold green")
+    table.add_column("$ per 1M in / cached / out", justify="right", style="dim")
+    table.add_column("price from", style="dim")
+    for model, entry in sorted(tracker.by_model.items()):
+        price = tracker.prices.get(model) if tracker.prices is not None else None
+        rates = "unknown"
+        if price is not None:
+            cached = "-" if price.cached is None else f"{price.cached:g}"
+            rates = f"{price.input:g} / {cached} / {price.output:g}"
+        known = price is not None or entry["cost"] > 0
+        table.add_row(
+            Text(model),
+            short_tokens(int(entry["input"])),
+            short_tokens(int(entry["cached"])),
+            short_tokens(int(entry["output"])),
+            f"~{format_usd(entry['cost'])}" if known else "unknown",
+            rates,
+            price.source if price is not None else "-",
+        )
     return table
 
 
 def session_header(
-    *, workspace: str, model: str, session_id: str, guidance: list[str], version: str = ""
+    *,
+    workspace: str,
+    model: str,
+    session_id: str,
+    guidance: list[str],
+    version: str = "",
+    rates: str = "",
 ) -> Group:
-    """Compact start-of-chat banner: product, folder, model and how approvals work."""
+    """Start-of-chat banner: folder, model, price, session and how approvals work."""
     title = Text.assemble((">_ ", "bold bright_cyan"), ("Edge Harness", "bold"))
     if version:
-        title.append(f" (v{version})", style="dim")
-    lines: list[RenderableType] = [
-        title,
-        Text("   " + workspace, style="green"),
-        Text.assemble(("   ", ""), (model, "cyan"), (f"  Session: {session_id}", "dim")),
-    ]
+        title.append(f" v{version}", style="dim")
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="dim", no_wrap=True)
+    details.add_column()
+    details.add_row("folder", Text(workspace, style="green"))
+    details.add_row("model", Text(model, style="cyan"))
+    if rates:
+        details.add_row("price", Text(rates, style="dim"))
+    details.add_row("session", Text(session_id, style="dim"))
     if guidance:
-        lines.append(Text("   guidance: " + ", ".join(guidance), style="dim"))
-    lines.append(
-        Text(
-            "   Edits and sandbox commands ask first: y once, a rest of session, n no. "
-            "Real machine commands need the word yes. /help",
-            style="dim",
-        )
+        details.add_row("guidance", Text(", ".join(guidance), style="dim"))
+    hints = Text(
+        "Edits and sandbox commands: y once, a rest of session, n no. "
+        "Real machine commands need the word yes.\n/help commands   /settings options   /cost spend",
+        style="dim",
     )
-    lines.append(Text(""))
-    return Group(*lines)
+    panel = Panel(
+        Group(details, Text(""), hints),
+        title=title,
+        title_align="left",
+        border_style="bright_black",
+        padding=(0, 1),
+    )
+    return Group(panel, Text(""))
 
 
 def short_tokens(count: int) -> str:
@@ -214,6 +305,9 @@ def status_segments(
     input_tokens: int,
     cached_tokens: int,
     output_tokens: int,
+    cost: str = "",
+    cost_style: str = "fg:ansibrightgreen",
+    fancy: bool = False,
 ) -> list[tuple[str, str]]:
     """Bottom status bar as (style, text) pairs for prompt_toolkit."""
     separator = ("fg:ansibrightblack", " · ")
@@ -226,12 +320,17 @@ def status_segments(
         used = context_used or 0
         left = max(0, 100 - round(100 * used / context_limit))
         color = "ansigreen" if left > 40 else "ansiyellow" if left > 15 else "ansired"
+        if fancy:
+            filled = min(8, round(8 * used / context_limit))
+            parts.append((f"fg:{color}", "\u25b0" * filled + "\u25b1" * (8 - filled)))
         parts.append((f"fg:{color}", f"Context {left}% left"))
         parts.append(("fg:ansiwhite", f"{short_tokens(used)} / {short_tokens(context_limit)}"))
     parts.append(("fg:ansiblue", f"{short_tokens(input_tokens)} in"))
     if cached_tokens:
         parts.append(("fg:ansimagenta", f"{short_tokens(cached_tokens)} cached"))
     parts.append(("fg:ansigreen", f"{short_tokens(output_tokens)} out"))
+    if cost:
+        parts.append((cost_style, cost))
     parts.append(("fg:ansibrightblack", "/help"))
     segments: list[tuple[str, str]] = []
     for index, part in enumerate(parts):
@@ -257,18 +356,35 @@ def prompt_style() -> Any:
     )
 
 
+def _session_cost(info: Any) -> str:
+    from code_harness.pricing import format_usd
+
+    usage = getattr(info, "usage", None)
+    spent = usage.get("spent") if isinstance(usage, dict) else None
+    if isinstance(spent, bool) or not isinstance(spent, int | float) or spent < 0:
+        return "-"
+    return f"~{format_usd(spent)}" if spent else "-"
+
+
 def sessions_table(infos: list[Any], current: str, now: float) -> Table:
     """Saved sessions, newest first; the short id works with /resume and --resume."""
     table = Table(title="Sessions in this folder", title_style="bold", show_edge=False)
     table.add_column("id", style="yellow")
     table.add_column("last used", style="green")
     table.add_column("turns", justify="right", style="cyan")
+    table.add_column("est. cost", justify="right", style="green")
     table.add_column("first message")
     for info in infos:
         marker = " *" if info.session_id == current else ""
         age = time_ago(now - info.updated) if info.updated else "older"
         turns = str(info.turns) if info.updated else "?"
-        table.add_row(info.session_id[:8] + marker, age, turns, Text(info.title or "(no title)"))
+        table.add_row(
+            info.session_id[:8] + marker,
+            age,
+            turns,
+            _session_cost(info),
+            Text(info.title or "(no title)"),
+        )
     return table
 
 
@@ -325,6 +441,7 @@ SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/model", "show the model and route; /model <id> switches"),
     ("/context", "context used vs the model's window"),
     ("/usage", "session token totals"),
+    ("/cost", "estimated session cost by model"),
     ("/compact", "summarize older messages now"),
     ("/plan", "show the task plan"),
     ("/changes", "files changed this session"),

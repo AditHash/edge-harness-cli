@@ -47,6 +47,7 @@ Inside chat
   /skill <name>         load a skill into this chat
   /mcp                  saved MCP servers and connection state
   /mcp connect <name>   connect a saved MCP server
+  /cost                 estimated session cost by model
   /approve              show approvals
   /approve ask          ask every time again
   /sessions             list sessions

@@ -14,6 +14,7 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, Label, RichLog, Static
 
+from code_harness.pricing import format_usd
 from code_harness.streaming import stream_turn
 from code_harness.ui import history_items
 from code_harness.usage import UsageTracker
@@ -60,11 +61,13 @@ class HarnessApp(App[None]):
         tracker: UsageTracker | None = None,
         title: str = "Edge harness",
         on_turn: Callable[[str], None] | None = None,
+        on_usage: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self.title = title
         self.tracker = tracker or UsageTracker()
         self.on_turn = on_turn
+        self.on_usage = on_usage
         self._shown: list[str] = []
         self.agent = make_agent(self._collect_review, self._approval_reply)
         self._busy = False
@@ -115,10 +118,12 @@ class HarnessApp(App[None]):
             return
         if text in {"/exit", "/quit"}:
             self.exit()
-        elif text == "/usage":
+        elif text in {"/usage", "/cost"}:
             self.log_line(self.tracker.summary())
         elif text.startswith("/"):
-            self.log_line("Commands in the TUI: /usage, /exit. Use `harness chat` for the rest.")
+            self.log_line(
+                "Commands in the TUI: /usage, /cost, /exit. Use `harness chat` for the rest."
+            )
         elif self._busy:
             self.log_line("A turn is still running.")
         else:
@@ -129,6 +134,10 @@ class HarnessApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def run_turn(self, prompt: str) -> None:
+        ledger = getattr(self.agent, "subagents", None)
+        if ledger is not None:
+            ledger.listener = self.tracker.add_call
+
         async def go() -> None:
             buffer: list[str] = []
             thinking: list[str] = []
@@ -152,16 +161,22 @@ class HarnessApp(App[None]):
                     buffer.append(event.text)
                     continue
                 if event.kind == "call_usage":
+                    self.tracker.add_call(
+                        event.text, event.input_tokens, event.output_tokens, event.cached_tokens
+                    )
+                    cost = self.tracker.cost
+                    spent = "" if cost is None else f" - ~{format_usd(cost)} this session"
                     self.call_from_thread(
                         self.set_status,
-                        f"Last model call: {event.input_tokens:,} in / {event.output_tokens:,} out",
+                        f"Last model call: {event.input_tokens:,} in / "
+                        f"{event.output_tokens:,} out{spent}",
                     )
                     continue
                 if buffer:
                     self.call_from_thread(self.log_line, "".join(buffer))
                     buffer.clear()
                 if event.kind == "usage":
-                    self.tracker.add(event.input_tokens, event.output_tokens)
+                    self.tracker.add(event.input_tokens, event.output_tokens, event.cached_tokens)
                 self.call_from_thread(self.log_line, f"[{event.kind}] {event.text}".rstrip())
             flush_thinking()
             if buffer:
@@ -174,5 +189,7 @@ class HarnessApp(App[None]):
         except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
             self.call_from_thread(self.log_line, f"Turn failed ({type(exc).__name__}).")
         finally:
+            if self.on_usage is not None and self.tracker.calls:
+                self.on_usage()
             self._busy = False
             self.call_from_thread(self.set_status, "Ready.")

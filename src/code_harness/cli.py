@@ -28,6 +28,7 @@ from code_harness.approvals import (
 )
 from code_harness.config import Settings
 from code_harness.instructions import Guidance, load_guidance
+from code_harness.pricing import format_usd
 from code_harness.proposals import Proposal
 from code_harness.sessions import Sessions
 from code_harness.streaming import stream_turn
@@ -37,10 +38,14 @@ from code_harness.ui import (
     branch,
     bullet_row,
     changes_table,
+    cost_table,
     estimated_context_tokens,
+    help_table,
     history_items,
     mark,
     short_duration,
+    tool_label,
+    tool_row,
     user_bar,
 )
 from code_harness.usage import UsageTracker
@@ -168,8 +173,8 @@ class _ThinkingMeter:
         self.chars += len(text)
         if self.show:
             if not self.active:
-                console.print(f"[bold magenta]{mark(console.encoding)} Thinking[/bold magenta]")
-            console.print(text, end="", style="italic magenta", markup=False, highlight=False)
+                console.print(f"[magenta]{mark(console.encoding)} Thinking[/magenta]")
+            console.print(text, end="", style="dim italic", markup=False, highlight=False)
         else:
             message = f"Thinking... ~{self.chars // 4:,} tokens"
             if self.status is None:
@@ -197,6 +202,37 @@ def _token_text(event: Any) -> str:
         f"[bright_blue]{event.input_tokens:,} in[/bright_blue]{cached} / "
         f"[bright_green]{event.output_tokens:,} out[/bright_green]"
     )
+
+
+def _new_tracker(settings: Settings) -> UsageTracker:
+    return UsageTracker(
+        settings.input_price_per_mtok,
+        settings.output_price_per_mtok,
+        prices=_price_book(settings),
+        budget_usd=settings.harness_session_budget_usd,
+    )
+
+
+def _price_book(settings: Settings) -> Any:
+    from code_harness.pricing import PriceBook
+
+    return PriceBook(
+        settings.harness_state_dir,
+        region=settings.aws_region,
+        input_override=settings.input_price_per_mtok,
+        output_override=settings.output_price_per_mtok,
+        cached_override=settings.cached_price_per_mtok,
+    )
+
+
+def _rates_text(prices: Any, model: str | None) -> str:
+    if not model or model == "auto":
+        return "shown per call; depends on the routed model" if model == "auto" else ""
+    price = prices.get(model)
+    if price is None:
+        return "unknown for this model; cost will not be estimated"
+    cached = "" if price.cached is None else f", ${price.cached:g} cached"
+    return f"${price.input:g} in, ${price.output:g} out{cached} per 1M ({price.source})"
 
 
 def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any) -> list[Any]:
@@ -228,6 +264,11 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
         input_tokens=tracker.input_tokens,
         cached_tokens=tracker.cached_tokens,
         output_tokens=tracker.output_tokens,
+        cost=_status_cost(tracker),
+        cost_style={"over": "fg:ansired bold", "near": "fg:ansiyellow"}.get(
+            tracker.budget_state(), "fg:ansibrightgreen"
+        ),
+        fancy=mark(console.encoding) == "\u25cf",
     )
 
 
@@ -252,6 +293,90 @@ def _show_history(agent: Any) -> None:
             console.print(bullet_row(row, mark(console.encoding), "bright_cyan"))
     console.print("[dim]Continue below; the model can see this conversation.[/dim]")
     console.print()
+
+
+def _status_cost(tracker: Any) -> str:
+    cost = tracker.cost
+    if cost is None:
+        return "cost unknown" if tracker.calls else ""
+    return f"~{format_usd(cost)}"
+
+
+def _notify(text: str) -> None:
+    """Show harness progress; it can hold model text, so it is never parsed as markup."""
+    head, _, rest = text.partition("\n")
+    if head.startswith("  "):
+        style = "dim"
+    elif head.startswith("run_on_host:"):
+        style = "bold green" if head.endswith("exit code 0") else "bold red"
+    elif head.startswith("Subagent"):
+        style = "bright_green"
+    else:
+        style = "dim cyan"
+    console.print(Text(head, style=style), highlight=False)
+    if rest:
+        console.print(Text(rest, style="dim"), highlight=False)
+
+
+class _Activity:
+    """A spinner with time and cost so far, between sending a request and the first output.
+
+    Stopped before tools run, because a tool can ask for approval at the prompt. Does nothing when
+    output is not a terminal.
+    """
+
+    def __init__(self, tracker: Any, started: float, spent_before: float) -> None:
+        from rich.spinner import Spinner
+
+        self.tracker = tracker
+        self.started = started
+        self.spent_before = spent_before
+        self.spinner = Spinner("dots", style="bright_cyan")
+        self.live: Any = None
+
+    def _render(self) -> Any:
+        parts = [f"Working {short_duration(time.monotonic() - self.started)}"]
+        if self.tracker is not None and self.tracker.cost is not None:
+            turn = self.tracker.spent - self.spent_before
+            parts.append(f"~{format_usd(turn)} this turn")
+            parts.append(f"~{format_usd(self.tracker.cost)} session")
+        self.spinner.update(text=Text(" \u00b7 ".join(parts), style="dim"))
+        return self.spinner
+
+    def start(self) -> None:
+        from rich.live import Live
+
+        if self.live is None and console.is_terminal:
+            self.live = Live(
+                get_renderable=self._render,
+                console=console,
+                refresh_per_second=4,
+                transient=True,
+            )
+            self.live.start()
+
+    def stop(self) -> None:
+        if self.live is not None:
+            self.live.stop()
+            self.live = None
+
+
+def _reply_estimate(agent: Any, tracker: Any) -> Callable[[int], str] | None:
+    """Live output size and cost while a reply streams; None if the rate is unknown."""
+    if tracker is None or tracker.prices is None:
+        return None
+    try:
+        price = tracker.prices.get(agent.model.get_config().get("model_id", ""))
+    except Exception:  # noqa: BLE001 - display only
+        return None
+    if price is None:
+        return None
+
+    def estimate(chars: int) -> str:
+        tokens = chars // 4
+        return f"~{tokens:,} tokens \u00b7 ~{format_usd(tokens * price.output / 1_000_000)} so far"
+
+    return estimate
 
 
 _prompt_session: Any = None
@@ -288,15 +413,20 @@ def _read_prompt(status: Callable[[], list[Any]]) -> str:
 class _ReplyView:
     """Streams the assistant's reply as live-rendered Markdown, one block per text segment."""
 
-    def __init__(self) -> None:
+    def __init__(self, estimate: Callable[[int], str] | None = None) -> None:
         self.text = ""
         self.live: Any = None
+        self.estimate = estimate
 
-    def _render(self) -> Any:
+    def _render(self, footer: bool = True) -> Any:
+        from rich.console import Group
         from rich.markdown import Markdown
 
         body = Markdown(self.text.lstrip(), code_theme=CODE_THEME)
-        return bullet_row(body, mark(console.encoding), "bright_white")
+        row = bullet_row(body, mark(console.encoding), "bright_white")
+        if footer and self.estimate is not None and console.is_terminal:
+            return Group(row, Text("  " + self.estimate(len(self.text)), style="dim"))
+        return row
 
     def add(self, delta: str) -> None:
         from rich.live import Live
@@ -316,6 +446,7 @@ class _ReplyView:
 
     def stop(self) -> None:
         if self.live is not None:
+            self.live.update(self._render(footer=False))
             self.live.stop()
             self.live = None
             if not console.is_terminal:
@@ -326,12 +457,23 @@ class _ReplyView:
 
 async def _show_turn(agent: object, prompt: Any, tracker: UsageTracker | None = None) -> None:
     meter = _ThinkingMeter(show=os.environ.get("HARNESS_SHOW_THINKING", "true").lower() != "false")
-    reply = _ReplyView()
+    reply = _ReplyView(_reply_estimate(agent, tracker))
     changes_before = len(SESSION_CHANGES)
     started = time.monotonic()
     turn_tokens = ""
+    spent_before = tracker.spent if tracker is not None else 0.0
+    activity = _Activity(tracker, started, spent_before)
+    ledger = getattr(agent, "subagents", None)
+    if tracker is not None and ledger is not None:
+        # Subagent calls are priced as they finish, not at the end of the turn.
+        ledger.listener = tracker.add_call
+    reported_tokens = False
+    unreported = [0, 0, 0]
+    activity.start()
     try:
         async for event in stream_turn(agent, prompt):
+            if event.kind not in {"call_usage", "usage"}:
+                activity.stop()
             if event.kind == "reasoning":
                 reply.stop()
                 meter.add(event.text)
@@ -342,43 +484,65 @@ async def _show_turn(agent: object, prompt: Any, tracker: UsageTracker | None = 
                 continue
             reply.stop()
             if event.kind == "tool_call":
-                name, _, target = event.text.partition(" ")
-                console.print(
-                    bullet_row(
-                        Text.assemble((name, "bold bright_cyan"), " ", (target, "bright_white")),
-                        mark(console.encoding),
-                        "bright_cyan",
-                    )
-                )
+                console.print(tool_row(event.text, console.encoding))
             elif event.kind == "tool_result":
                 if event.text.endswith(": failed"):
+                    name = event.text.removesuffix(": failed")
                     console.print(
-                        f"[red]  {branch(console.encoding)} {escape(event.text)}[/red]",
+                        Text(
+                            f"  {branch(console.encoding)} {tool_label(name)} failed",
+                            style="red",
+                        ),
                         highlight=False,
                     )
+                activity.start()
             elif event.kind == "call_usage":
+                amount = None
+                if tracker is not None:
+                    amount = tracker.add_call(
+                        event.text, event.input_tokens, event.output_tokens, event.cached_tokens
+                    )
+                unreported[0] += event.input_tokens
+                unreported[1] += event.output_tokens
+                unreported[2] += event.cached_tokens
                 served = f"[yellow]{escape(event.text)}[/yellow]  " if event.text else ""
+                price = f" [dim]\u00b7[/dim] [green]~{format_usd(amount)}[/green]" if amount else ""
                 console.print(
-                    f"  [dim]{branch(console.encoding)}[/dim] {served}{_token_text(event)}",
+                    f"  [dim]{branch(console.encoding)}[/dim] {served}{_token_text(event)}{price}",
                     highlight=False,
                 )
             elif event.kind == "usage":
                 if tracker is not None:
                     tracker.add(event.input_tokens, event.output_tokens, event.cached_tokens)
+                reported_tokens = True
                 turn_tokens = _token_text(event)
             elif event.kind == "compacted":
                 console.print(f"[cyan]{escape(event.text)}[/cyan]")
             elif event.kind == "error":
                 console.print(f"[yellow]{escape(event.text)}[/yellow]")
     finally:
+        activity.stop()
         reply.stop()
         meter.stop()
+        if tracker is not None and not reported_tokens and any(unreported):
+            # A turn cut short never reports its total; keep the tokens it did use.
+            tracker.add(*unreported)
     if len(SESSION_CHANGES) > changes_before:
         console.print(changes_table(SESSION_CHANGES[changes_before:], "Changed this turn"))
     worked = short_duration(time.monotonic() - started)
     clock = datetime.now().strftime("%H:%M")
     tail = f" [dim]-[/dim] {turn_tokens}" if turn_tokens else ""
-    console.print(f"  [dim]Worked for {worked} - {clock}[/dim]{tail}", highlight=False)
+    money = ""
+    if tracker is not None and tracker.cost is not None:
+        money = (
+            f" [dim]-[/dim] [green]~{format_usd(tracker.spent - spent_before)}[/green] [dim]turn,[/dim]"
+            f" [green]~{format_usd(tracker.cost)}[/green] [dim]session[/dim]"
+        )
+    console.print(f"  [dim]Worked for {worked} - {clock}[/dim]{tail}{money}", highlight=False)
+    if tracker is not None:
+        warning = tracker.budget_warning()
+        if warning:
+            console.print(Text(warning, style="bold yellow"), highlight=False)
     console.print()
 
 
@@ -495,9 +659,7 @@ def _make_agent(
         review_host=host_review,
         # Subagent progress carries model text, so it is never parsed as markup. A TUI owns the
         # screen, so console output there would corrupt it.
-        notify=(lambda text: None)
-        if review_io is not None
-        else lambda text: console.print(f"[cyan]{escape(text)}[/cyan]", highlight=False),
+        notify=(lambda text: None) if review_io is not None else _notify,
     )
 
 
@@ -672,10 +834,13 @@ def chat(
         connected_servers: list[str] = []
         mcp_tools = _open_mcp(stack, mcp_config, settings, mcp, connected_servers)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
-        tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
+        tracker = _new_tracker(settings)
         SESSION_APPROVALS.reset()
         SESSION_CHANGES.clear()
         session_id = sessions.resolve(resume) if resume else sessions.create()
+        if resume:
+            stored = sessions.info(session_id)
+            tracker.start_session(stored.usage, stored.turns)
 
         def resume_hint() -> None:
             # Reads these when the chat ends, so /new and /resume are reflected. Messages count as
@@ -697,6 +862,7 @@ def chat(
                 session_id=session_id,
                 guidance=[item.path for item in guidance],
                 version=__version__,
+                rates=_rates_text(tracker.prices, current_model),
             )
         )
         if resume:
@@ -716,13 +882,12 @@ def chat(
             if prompt in {"/exit", "/quit"}:
                 break
             if prompt == "/help":
-                console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /image PATH  /skills  /skill NAME  /mcp  /approve [ask]  /exit"
-                )
+                console.print(help_table())
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
                 manager = sessions.manager(session_id)
                 agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
+                tracker.start_session()
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
                 from code_harness.ui import sessions_table
@@ -744,6 +909,8 @@ def chat(
                     agent = replacement
                     manager = candidate_manager
                     session_id = candidate
+                    stored = sessions.info(session_id)
+                    tracker.start_session(stored.usage, stored.turns)
                     console.print(f"Resumed session {session_id}.")
                     _show_history(agent)
             elif prompt == "/compact":
@@ -849,6 +1016,12 @@ def chat(
                 console.print("Standing approvals cleared. " + SESSION_APPROVALS.describe())
             elif prompt == "/usage":
                 console.print(tracker.summary(), markup=False)
+            elif prompt == "/cost":
+                console.print(cost_table(tracker))
+                console.print(
+                    "Estimates from AWS list prices, not a bill. Context summaries are not counted.",
+                    style="dim",
+                )
             elif prompt == "/context":
                 console.print(_context_report(agent, settings), markup=False)
             elif prompt == "/status":
@@ -867,6 +1040,10 @@ def chat(
                     console.print("\nTurn cancelled.")
                 except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
                     console.print(f"[red]{_failure_message(exc)}[/red]", markup=True)
+                finally:
+                    # Saved even when a turn fails: its model calls were still charged.
+                    if tracker.calls:
+                        sessions.record_usage(session_id, tracker.totals())
     except KeyboardInterrupt:
         console.print("\nSession ended.")
     except WorkspaceError as exc:
@@ -898,7 +1075,10 @@ def tui(
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = sessions.resolve(resume) if resume else sessions.create()
         manager = sessions.manager(session_id)
-        tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
+        tracker = _new_tracker(settings)
+        if resume:
+            stored = sessions.info(session_id)
+            tracker.start_session(stored.usage, stored.turns)
 
         def make_agent(display: Callable[[str], None], read_reply: Callable[[str], str]) -> Any:
             return _make_agent(
@@ -906,7 +1086,10 @@ def tui(
             )
 
         HarnessApp(
-            make_agent, tracker, on_turn=lambda text: sessions.record_turn(session_id, text)
+            make_agent,
+            tracker,
+            on_turn=lambda text: sessions.record_turn(session_id, text),
+            on_usage=lambda: sessions.record_usage(session_id, tracker.totals()),
         ).run()
         console.print(sessions.resume_hint(session_id), markup=False, highlight=False)
     except WorkspaceError as exc:

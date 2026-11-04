@@ -240,7 +240,7 @@ def test_tui_resume_uses_that_session(tmp_path: Path, monkeypatch: pytest.Monkey
     used: list[str] = []
 
     class FakeApp:
-        def __init__(self, make_agent, tracker, on_turn=None):
+        def __init__(self, make_agent, tracker, on_turn=None, on_usage=None):
             make_agent(print, input)
 
         def run(self):

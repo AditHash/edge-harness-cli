@@ -266,7 +266,7 @@ def test_cli_lists_and_resumes_workspace_session(
     runner = CliRunner()
     first = runner.invoke(cli.app, ["chat", "--workspace", str(root)], input="/sessions\n/exit\n")
     assert first.exit_code == 0
-    match = re.search(r"Session: ([a-f0-9]{32})", first.output)
+    match = re.search(r"session\s+([a-f0-9]{32})", first.output)
     assert match is not None
     session_id = match.group(1)
     assert session_id[:8] in first.output.split("Sessions in this folder")[1]
