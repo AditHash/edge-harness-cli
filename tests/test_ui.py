@@ -314,3 +314,17 @@ def test_tab_completes_a_slash_command_at_the_terminal(monkeypatch) -> None:
         finally:
             typist.join()
         assert shown == ["/changes"]
+
+
+def test_sessions_table_shows_short_id_age_and_title() -> None:
+    from code_harness.sessions import SessionInfo
+
+    infos = [
+        SessionInfo("a" * 32, "[red]fix bug[/red]", 1000.0, 3),
+        SessionInfo("b" * 32, "", 0.0, 0),
+    ]
+    text = _render(ui.sessions_table(infos, "a" * 32, 1000.0 + 7200))
+    assert "aaaaaaaa *" in text and "2h ago" in text and "[red]fix bug[/red]" in text
+    assert "bbbbbbbb" in text and "older" in text and "(no title)" in text
+    assert ui.time_ago(5) == "just now" and ui.time_ago(300) == "5m ago"
+    assert ui.time_ago(172800) == "2d ago"

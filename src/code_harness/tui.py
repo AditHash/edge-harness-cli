@@ -58,10 +58,12 @@ class HarnessApp(App[None]):
         make_agent: Callable[[Callable[[str], None], Callable[[str], str]], Any],
         tracker: UsageTracker | None = None,
         title: str = "Edge harness",
+        on_turn: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.title = title
         self.tracker = tracker or UsageTracker()
+        self.on_turn = on_turn
         self._shown: list[str] = []
         self.agent = make_agent(self._collect_review, self._approval_reply)
         self._busy = False
@@ -156,6 +158,8 @@ class HarnessApp(App[None]):
 
         try:
             asyncio.run(go())
+            if self.on_turn is not None:
+                self.on_turn(prompt)
         except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
             self.call_from_thread(self.log_line, f"Turn failed ({type(exc).__name__}).")
         finally:

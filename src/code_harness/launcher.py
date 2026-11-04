@@ -233,6 +233,9 @@ def main(
         int,
         typer.Option(help="Check tool support of N untested models (N small billed calls)"),
     ] = 0,
+    continue_last: Annotated[
+        bool, typer.Option("--continue", help="Resume the latest session in this folder")
+    ] = False,
     skill: Annotated[
         list[str] | None,
         typer.Option("--skill", help="Load .agents/skills/NAME/SKILL.md (repeatable)"),
@@ -291,6 +294,18 @@ def main(
         raise typer.Exit(1)
     resolve_model(effective)
     from code_harness import cli
+
+    if continue_last and not resume:
+        from code_harness.sessions import Sessions
+        from code_harness.workspace import WorkspaceError
+
+        try:
+            resume = Sessions(state_dir() / "sessions.sqlite", Path.cwd()).latest()
+        except WorkspaceError as exc:
+            console.print(str(exc), markup=False)
+            raise typer.Exit(1) from None
+        if resume is None:
+            console.print("No earlier session in this folder; starting a new one.")
 
     if tui:
         cli.main()

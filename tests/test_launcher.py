@@ -240,7 +240,7 @@ def test_tui_resume_uses_that_session(tmp_path: Path, monkeypatch: pytest.Monkey
     used: list[str] = []
 
     class FakeApp:
-        def __init__(self, make_agent, tracker):
+        def __init__(self, make_agent, tracker, on_turn=None):
             make_agent(print, input)
 
         def run(self):
@@ -254,3 +254,24 @@ def test_tui_resume_uses_that_session(tmp_path: Path, monkeypatch: pytest.Monkey
     )
     cli.tui(workspace=workspace, project_instructions=False, skill=None, resume=session_id)
     assert used == [session_id]
+
+
+def test_continue_resumes_latest_or_starts_new(
+    monkeypatch: pytest.MonkeyPatch, isolated: Path
+) -> None:
+    from code_harness import cli
+    from code_harness.sessions import Sessions
+
+    launcher.save({"region": "ap-south-1", "model": "m1"})
+    monkeypatch.setattr(launcher, "ensure_credentials", lambda *a, **k: True)
+    started: dict = {}
+    monkeypatch.setattr(cli, "chat", lambda **k: started.update(k))
+    (isolated / "repo").mkdir()
+    monkeypatch.chdir(isolated / "repo")
+    fresh = CliRunner().invoke(launcher.launcher, ["--continue"])
+    assert "No earlier session" in fresh.output and started["resume"] is None
+    sessions = Sessions(launcher.state_dir() / "sessions.sqlite", Path.cwd())
+    session_id = sessions.create()
+    sessions.record_turn(session_id, "hello")
+    assert CliRunner().invoke(launcher.launcher, ["--continue"]).exit_code == 0
+    assert started["resume"] == session_id

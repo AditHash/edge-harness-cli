@@ -202,6 +202,32 @@ def prompt_style() -> Any:
     )
 
 
+def sessions_table(infos: list[Any], current: str, now: float) -> Table:
+    """Saved sessions, newest first; the short id works with /resume and --resume."""
+    table = Table(title="Sessions in this folder", title_style="bold", show_edge=False)
+    table.add_column("id", style="yellow")
+    table.add_column("last used", style="green")
+    table.add_column("turns", justify="right", style="cyan")
+    table.add_column("first message")
+    for info in infos:
+        marker = " *" if info.session_id == current else ""
+        age = time_ago(now - info.updated) if info.updated else "older"
+        turns = str(info.turns) if info.updated else "?"
+        table.add_row(info.session_id[:8] + marker, age, turns, Text(info.title or "(no title)"))
+    return table
+
+
+def time_ago(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    if minutes < 1:
+        return "just now"
+    if minutes < 60:
+        return f"{minutes}m ago"
+    if minutes < 1440:
+        return f"{minutes // 60}h ago"
+    return f"{minutes // 1440}d ago"
+
+
 SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/help", "list commands"),
     ("/model", "show the model and route; /model <id> switches"),

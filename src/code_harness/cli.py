@@ -554,7 +554,7 @@ def chat(
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
         SESSION_APPROVALS.reset()
         SESSION_CHANGES.clear()
-        session_id = resume or sessions.create()
+        session_id = sessions.resolve(resume) if resume else sessions.create()
         manager = sessions.manager(session_id)
         agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
         from code_harness import __version__
@@ -588,12 +588,15 @@ def chat(
                 agent = _make_agent(workspace, manager, guidance, current_model, mcp_tools)
                 console.print(f"Started session {session_id}.")
             elif prompt == "/sessions":
-                console.print("\n".join(sessions.list()) or "No sessions for this workspace.")
+                from code_harness.ui import sessions_table
+
+                console.print(sessions_table(sessions.details(session_id), session_id, time.time()))
             elif prompt == "/resume":
                 console.print("Use /sessions to list IDs, then /resume ID.")
             elif prompt.startswith("/resume "):
                 candidate = prompt.removeprefix("/resume ").strip()
                 try:
+                    candidate = sessions.resolve(candidate)
                     candidate_manager = sessions.manager(candidate)
                     replacement = _make_agent(
                         workspace, candidate_manager, guidance, current_model, mcp_tools
@@ -664,6 +667,7 @@ def chat(
             elif prompt:
                 try:
                     asyncio.run(_show_turn(agent, prompt, tracker))
+                    sessions.record_turn(session_id, prompt)
                 except KeyboardInterrupt:
                     console.print("\nTurn cancelled.")
                 except Exception as exc:  # noqa: BLE001 - provider errors may contain sensitive data
@@ -697,7 +701,8 @@ def tui(
             Workspace(root), project_instructions=project_instructions, skills=skill or []
         )
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
-        manager = sessions.manager(resume or sessions.create())
+        session_id = sessions.resolve(resume) if resume else sessions.create()
+        manager = sessions.manager(session_id)
         tracker = UsageTracker(settings.input_price_per_mtok, settings.output_price_per_mtok)
 
         def make_agent(display: Callable[[str], None], read_reply: Callable[[str], str]) -> Any:
@@ -705,7 +710,9 @@ def tui(
                 root, manager, guidance, review_io=ReviewIO(True, display, read_reply)
             )
 
-        HarnessApp(make_agent, tracker).run()
+        HarnessApp(
+            make_agent, tracker, on_turn=lambda text: sessions.record_turn(session_id, text)
+        ).run()
     except WorkspaceError as exc:
         console.print(str(exc), markup=False)
         raise typer.Exit(1) from None
