@@ -159,7 +159,7 @@ class _ThinkingMeter:
         self.chars += len(text)
         if self.show:
             if not self.active:
-                console.print("\n[dim]Thinking:[/dim]")
+                console.print(f"[bold magenta]{mark(console.encoding)} Thinking[/bold magenta]")
             console.print(text, end="", style="italic magenta", markup=False, highlight=False)
         else:
             message = f"Thinking... ~{self.chars // 4:,} tokens"
@@ -176,7 +176,8 @@ class _ThinkingMeter:
         if self.status is not None:
             self.status.stop()
             self.status = None
-        console.print(f"\n[dim](thinking: ~{self.chars // 4:,} tokens)[/dim]")
+        console.print()
+        console.print(f"  [dim]thinking: ~{self.chars // 4:,} tokens[/dim]")
         self.active = False
         self.chars = 0
 
