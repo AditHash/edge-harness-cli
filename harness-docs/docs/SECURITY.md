@@ -122,7 +122,7 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   sandbox. A role whose capability is unavailable is not offered.
 - Subagents never get `spawn_subagent` (depth one) or MCP tools, because the MCP approval guard is a
   hook on the main agent. No subagent has host command access, and only `explore` can reach the
-  network, through the approved web tools.
+  network, through the approved `web_fetch`.
 - Edits and commands use the main agent's guarded tools and its approval lock, so a subagent cannot
   skip an approval. `approve-all` covers them exactly as it covers the main agent.
 - Limits: the number of subagents is not capped. Up to `HARNESS_SUBAGENT_MAX_PARALLEL` run at once
@@ -130,7 +130,7 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   subagents finish, so a turn can pass that figure. Each has the main agent's turn and output limits
   and a 20,000 character report. Provider errors are reduced to the exception type. Reports are marked untrusted.
 
-## Web search and fetch (2026-11-04)
+## Web fetch (2026-11-04)
 
 - The SDK's built-in `web_fetch` is not used: it has no block on private addresses, so a
   prompt-injected model could reach a cloud metadata service or the LAN, including through a redirect.
@@ -138,9 +138,9 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   address to be public. Each redirect hop is checked again, and the connection goes to the checked
   address, so a DNS change cannot move it. Text responses only, at most 5 MB and 50,000 characters,
   30 seconds. No cookies or credentials are sent.
-- `web_search` uses Exa's hosted endpoint, a third party that receives every query under its own terms.
-- Every search and fetch needs approval and is refused without a terminal. `/approve` for edits and
-  commands does not cover them. Typing `a` covers all searches, or one host, for the session.
-- **Remaining risk:** a URL or query can carry repository content out, and a host approved with `a`
+- There is no web search tool, so no search provider receives queries.
+- Every fetch needs approval and is refused without a terminal. Standing approvals for edits and
+  commands do not cover it. Typing `a` covers one host for the session.
+- **Remaining risk:** a URL can carry repository content out, and a host approved with `a`
   is not asked again, although each URL is still shown. Read URLs with long query strings before
   approving. Web content is marked untrusted, but a model can still be misled by it.

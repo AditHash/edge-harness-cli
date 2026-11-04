@@ -219,3 +219,8 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Not exercised live: approval prompts at a terminal, and a real model choosing these tools (the AWS login had expired during this work).
 - Tests: default 246 passed, 14 skipped in 47.59s; `HARNESS_TEST_WSL=1`: 255 passed, 5 skipped in 64.65s (0:01:04). Ruff and mypy clean.
 - Fix: added certifi roots after Python on Windows refused example.com while `system+certifi` accepted it; expired, self-signed and wrong-host certificates stayed refused. HTML comments no longer reach page text. Tests: default 247 passed, 14 skipped in 37.87s; `HARNESS_TEST_WSL=1`: 256 passed, 5 skipped in 65.56s (0:01:05).
+
+## 2026-11-04 - Web search removed
+
+- Removed `web_search` and Exa at the user's request; `web_fetch` stays. The model is told it cannot search and should only fetch URLs that are given, found in pages or the repository, or that it is confident exist.
+- Tests: default 247 passed, 14 skipped in 32.76s; `HARNESS_TEST_WSL=1`: 256 passed, 5 skipped in 89.61s (0:01:29). Ruff and mypy clean.
