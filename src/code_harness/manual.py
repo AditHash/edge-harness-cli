@@ -42,6 +42,8 @@ Inside chat
   /compact              summarize older messages
   /plan                 show task plan
   /changes              files changed this session
+  /skills               list available skills
+  /skill <name>         load a skill into this chat
   /mcp                  saved MCP servers and connection state
   /mcp connect <name>   connect a saved MCP server
   /approve              show approvals

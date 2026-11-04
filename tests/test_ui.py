@@ -278,7 +278,7 @@ def test_every_hinted_command_is_handled_by_chat() -> None:
 
     source = Path(cli.__file__).read_text(encoding="utf-8")
     for command, _ in ui.SLASH_COMMANDS:
-        assert f'"{command}"' in source, command
+        assert f'"{command}"' in source or f'"{command} "' in source, command
 
 
 def test_tab_completes_a_slash_command_at_the_terminal(monkeypatch) -> None:

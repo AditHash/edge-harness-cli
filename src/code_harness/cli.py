@@ -439,6 +439,17 @@ def _make_agent(
     )
 
 
+def _load_guidance(
+    settings: Settings, project_instructions: bool, skills: list[str]
+) -> list[Guidance]:
+    return load_guidance(
+        Workspace(settings.workspace),
+        project_instructions=project_instructions,
+        skills=skills,
+        global_dir=settings.harness_state_dir / "skills",
+    )
+
+
 def _connect_server(stack: contextlib.ExitStack, server: Any, settings: Settings) -> list[Any]:
     """Ask the user, then connect one local (sandboxed) or remote MCP server."""
     from code_harness.mcp_integration import connect_sandboxed_mcp
@@ -526,9 +537,7 @@ def ask(
     """Ask a question about a workspace; edits require approval."""
     try:
         root = workspace or Path.cwd()
-        guidance = load_guidance(
-            Workspace(root), project_instructions=project_instructions, skills=skill or []
-        )
+        guidance = _load_guidance(Settings(workspace=root), project_instructions, skill or [])
         with contextlib.ExitStack() as stack:
             mcp_tools = _open_mcp(stack, mcp_config, Settings(workspace=root))
             asyncio.run(
@@ -562,11 +571,8 @@ def chat(
     try:
         settings = Settings(workspace=workspace)
         current_model = settings.bedrock_model_id
-        guidance = load_guidance(
-            Workspace(settings.workspace),
-            project_instructions=project_instructions,
-            skills=skill or [],
-        )
+        guidance = _load_guidance(settings, project_instructions, skill or [])
+        selected_skills = list(skill or [])
         connected_servers: list[str] = []
         mcp_tools = _open_mcp(stack, mcp_config, settings, mcp, connected_servers)
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
@@ -599,7 +605,7 @@ def chat(
                 break
             if prompt == "/help":
                 console.print(
-                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /mcp  /approve [ask]  /exit"
+                    "/help  /new  /clear  /sessions  /resume ID  /compact  /model [ID]  /status  /usage  /context  /plan  /changes  /skills  /skill NAME  /mcp  /approve [ask]  /exit"
                 )
             elif prompt in {"/new", "/clear"}:
                 session_id = sessions.create()
@@ -670,6 +676,29 @@ def chat(
                     console.print(changes_table(SESSION_CHANGES, "Changed this session"))
                 else:
                     console.print("No approved file changes in this session.")
+            elif prompt == "/skills":
+                from code_harness.instructions import list_skills
+                from code_harness.ui import skills_table
+
+                available = list_skills(
+                    Workspace(settings.workspace), settings.harness_state_dir / "skills"
+                )
+                console.print(skills_table(available, selected_skills))
+            elif prompt.startswith("/skill "):
+                name = prompt.removeprefix("/skill ").strip()
+                try:
+                    candidates = list(dict.fromkeys([*selected_skills, name]))
+                    loaded = _load_guidance(settings, project_instructions, candidates)
+                    replacement = _make_agent(workspace, manager, loaded, current_model, mcp_tools)
+                except WorkspaceError as exc:
+                    console.print(str(exc), markup=False)
+                except Exception as exc:  # noqa: BLE001 - do not expose provider error contents
+                    console.print(f"[red]Cannot load skill ({type(exc).__name__}).[/red]")
+                else:
+                    agent = replacement
+                    guidance = loaded
+                    selected_skills = candidates
+                    console.print(f"Loaded skill {name}.", markup=False)
             elif prompt == "/mcp":
                 from code_harness.mcp_registry import load_servers
                 from code_harness.ui import mcp_table
@@ -746,9 +775,7 @@ def tui(
     root = (workspace or Path.cwd()).resolve()
     try:
         settings = Settings(workspace=root)
-        guidance = load_guidance(
-            Workspace(root), project_instructions=project_instructions, skills=skill or []
-        )
+        guidance = _load_guidance(Settings(workspace=root), project_instructions, skill or [])
         sessions = Sessions(settings.harness_state_dir / "sessions.sqlite", settings.workspace)
         session_id = sessions.resolve(resume) if resume else sessions.create()
         manager = sessions.manager(session_id)

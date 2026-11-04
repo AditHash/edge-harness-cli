@@ -236,6 +236,24 @@ def mcp_table(servers: dict[str, Any], connected: list[str]) -> Table | Text:
     return table
 
 
+def skills_table(skills: list[Any], selected: list[str]) -> Table | Text:
+    """Skills available by name, marking those loaded in this chat."""
+    if not skills:
+        return Text(
+            "No skills found. Add .agents/skills/<name>/SKILL.md here, "
+            "or in the skills folder of ~/.edge-harness."
+        )
+    table = Table(title="Skills", title_style="bold", show_edge=False)
+    table.add_column("name", style="cyan")
+    table.add_column("from", style="green")
+    table.add_column("state")
+    table.add_column("description")
+    for skill in skills:
+        state = Text("loaded", "green") if skill.name in selected else Text("-", "dim")
+        table.add_row(Text(skill.name), skill.where, state, Text(skill.description))
+    return table
+
+
 def time_ago(seconds: float) -> str:
     minutes = int(seconds // 60)
     if minutes < 1:
@@ -255,6 +273,8 @@ SLASH_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/compact", "summarize older messages now"),
     ("/plan", "show the task plan"),
     ("/changes", "files changed this session"),
+    ("/skills", "list skills in this repo and your global folder"),
+    ("/skill", "/skill <name> loads a skill into this chat"),
     ("/mcp", "saved MCP servers; /mcp connect <name> connects one"),
     ("/approve", "show approvals"),
     ("/approve ask", "ask every time again"),
