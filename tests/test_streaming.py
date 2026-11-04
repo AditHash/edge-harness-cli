@@ -239,3 +239,80 @@ def test_cached_prompt_tokens_are_reported() -> None:
     tracker = UsageTracker()
     tracker.add(61, 38, 1040)
     assert "1040 cached input tokens" in tracker.summary()
+
+
+def _filtered(chunks: list[str]) -> list[tuple[str, str]]:
+    from code_harness.streaming import ThinkFilter
+
+    think = ThinkFilter()
+    out = [item for chunk in chunks for item in think.feed(chunk)]
+    out += think.finish_message()
+    merged: list[tuple[str, str]] = []
+    for kind, text in out:
+        if merged and merged[-1][0] == kind:
+            merged[-1] = (kind, merged[-1][1] + text)
+        else:
+            merged.append((kind, text))
+    return merged
+
+
+def test_think_block_is_moved_out_of_the_reply_however_it_is_split() -> None:
+    whole = " <think>plan it</think>\n\nThe answer"
+    expected = [("reasoning", "plan it"), ("text_delta", "The answer")]
+    assert _filtered([whole]) == expected
+    assert _filtered(list(whole)) == expected
+    assert _filtered([" <thi", "nk>plan", " it</th", "ink>", "\n", "\nThe ", "answer"]) == expected
+
+
+def test_text_that_only_mentions_the_tag_is_untouched() -> None:
+    for text in ["Use the <think> tag here", "<thin air", "<b>bold</b>", "  plain"]:
+        assert _filtered(list(text)) == [("text_delta", text)]
+
+
+def test_unclosed_block_stays_visible_as_reasoning() -> None:
+    assert _filtered(["<think>never closed </thi"]) == [("reasoning", "never closed </thi")]
+
+
+def test_each_message_gets_its_own_decision() -> None:
+    from code_harness.streaming import ThinkFilter
+
+    think = ThinkFilter()
+    assert think.feed("first") == [("text_delta", "first")]
+    assert think.finish_message() == []
+    assert think.feed("<think>x</think>y") == [("reasoning", "x"), ("text_delta", "y")]
+
+
+def test_real_stream_never_shows_think_tags_as_text(tmp_path) -> None:
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from strands.models import Model
+
+    from code_harness.agent import create_agent
+    from code_harness.config import Settings
+    from code_harness.streaming import stream_turn
+
+    async def model_stream(*args, **kwargs):
+        yield {"messageStart": {"role": "assistant"}}
+        for chunk in ["<thi", "nk>secret plan</thi", "nk>Answer"]:
+            yield {"contentBlockDelta": {"delta": {"text": chunk}}}
+        yield {"contentBlockStop": {}}
+        yield {"messageStop": {"stopReason": "end_turn"}}
+        usage = {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2}
+        yield {"metadata": {"usage": usage, "metrics": {"latencyMs": 1}}}
+
+    model = MagicMock(spec=Model)
+    model.stateful = False
+    model.get_config.return_value = {}
+    model.estimate_utilization.return_value = 0.0
+    model.stream.side_effect = model_stream
+    agent = create_agent(Settings(workspace=tmp_path), model=model)
+
+    async def collect():
+        return [event async for event in stream_turn(agent, "hi")]
+
+    events = asyncio.run(collect())
+    text = "".join(event.text for event in events if event.kind == "text_delta")
+    thinking = "".join(event.text for event in events if event.kind == "reasoning")
+    assert text == "Answer"
+    assert thinking == "secret plan"

@@ -2,12 +2,81 @@
 
 import threading
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 from code_harness.contracts import AgentEvent
 from code_harness.usage import SubagentLedger
 
 SUMMARY_KEYS = ("path", "command", "question", "query", "url", "task")
+
+
+ThinkKind = Literal["text_delta", "reasoning"]
+
+
+class ThinkFilter:
+    """Moves a leading `<think>...</think>` block out of a model's reply text.
+
+    Some models write their reasoning into the reply instead of a reasoning block. Only a block at
+    the very start of a message counts, so a reply that merely mentions the tag stays intact. An
+    unclosed block stays reasoning, which the interface still shows as thinking.
+    """
+
+    OPEN = "<think>"
+    CLOSE = "</think>"
+
+    def __init__(self) -> None:
+        self.state = "start"
+        self.buffer = ""
+
+    def feed(self, chunk: str) -> list[tuple[ThinkKind, str]]:
+        self.buffer += chunk
+        out: list[tuple[ThinkKind, str]] = []
+        while self.buffer:
+            if self.state == "text":
+                out.append(("text_delta", self.buffer))
+                self.buffer = ""
+            elif self.state == "start":
+                head = self.buffer.lstrip()
+                if not head or (len(head) < len(self.OPEN) and self.OPEN.startswith(head)):
+                    break  # Not enough text yet to decide.
+                if head.startswith(self.OPEN):
+                    self.state, self.buffer = "think", head[len(self.OPEN) :]
+                else:
+                    self.state = "text"
+            elif self.state == "think":
+                before, closed, after = self.buffer.partition(self.CLOSE)
+                if closed:
+                    if before:
+                        out.append(("reasoning", before))
+                    self.state, self.buffer = "after", after
+                    continue
+                # Hold back only what could be the start of the closing tag.
+                keep = next(
+                    (
+                        size
+                        for size in range(len(self.CLOSE) - 1, 0, -1)
+                        if self.buffer.endswith(self.CLOSE[:size])
+                    ),
+                    0,
+                )
+                ready = self.buffer[: len(self.buffer) - keep]
+                if ready:
+                    out.append(("reasoning", ready))
+                self.buffer = self.buffer[len(ready) :]
+                break
+            else:  # "after": drop the blank space between the block and the answer.
+                self.buffer = self.buffer.lstrip()
+                if self.buffer:
+                    self.state = "text"
+        return out
+
+    def finish_message(self) -> list[tuple[ThinkKind, str]]:
+        """Release held text at the end of a message and get ready for the next one."""
+        held, state = self.buffer, self.state
+        self.state, self.buffer = "start", ""
+        if not held:
+            return []
+        return [("reasoning" if state == "think" else "text_delta", held)]
 
 
 def tool_summary(name: str, arguments: Any) -> str:
@@ -63,13 +132,18 @@ async def _stream_events(
     agent: Any, prompt: Any, ledger: SubagentLedger | None, extra: dict[str, Any]
 ) -> AsyncIterator[AgentEvent]:
     seen_tools: dict[str, str] = {}
+    think = ThinkFilter()
     manager = getattr(agent, "conversation_manager", None)
     removed_before = getattr(manager, "removed_message_count", 0)
     async for event in agent.stream_async(
         prompt, limits={"turns": 20, "output_tokens": 32768}, **extra
     ):
+        if "message" in event or "result" in event:
+            for kind, text in think.finish_message():
+                yield AgentEvent(kind, text)
         if isinstance(event.get("data"), str):
-            yield AgentEvent("text_delta", event["data"])
+            for kind, text in think.feed(event["data"]):
+                yield AgentEvent(kind, text)
         elif event.get("reasoning") and isinstance(event.get("reasoningText"), str):
             # Reasoning text is not shown; its size drives a live token counter.
             yield AgentEvent("reasoning", event["reasoningText"])
