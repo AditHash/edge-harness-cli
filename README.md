@@ -96,7 +96,19 @@ saving.
 
 ## Model performance
 
-[`harness-docs/docs/MODEL_PERFORMANCE.md`](harness-docs/docs/MODEL_PERFORMANCE.md) records how every Bedrock model did on the same scenarios. Refresh it with `uv run python scripts/model_matrix.py`, which makes billed model calls.
+[`harness-docs/docs/MODEL_PERFORMANCE.md`](harness-docs/docs/MODEL_PERFORMANCE.md) records how every Bedrock model did on the same scenarios. Refresh it with `uv run python scripts/model_matrix.py`, which makes billed model calls and rewrites the table below.
+
+<!-- model-performance:start -->
+Last run 2026-11-04: 39 models, 39 runs in total. Few runs per model means these are samples, not rankings. Always read a command before approving it, whatever the rating.
+
+| Rating | Models | Which |
+|---|---:|---|
+| Reliable | 10 | `auto`, `deepseek.v3.2`, `in.anthropic.claude-haiku-4-5-20251001-v1:0`, `in.moonshotai.kimi-k3`, `minimax.minimax-m2.5`, `moonshot.kimi-k2-thinking`, `moonshotai.kimi-k2.5`, `qwen.qwen3-235b-a22b-2507-v1:0`, `qwen.qwen3-32b-v1:0`, `zai.glm-5` |
+| Mostly works | 8 | `deepseek.v3-v1:0`, `minimax.minimax-m2.1`, `mistral.devstral-2-123b`, `nvidia.nemotron-nano-9b-v2`, `openai.gpt-oss-20b-1:0`, `qwen.qwen3-coder-480b-a35b-v1:0`, `qwen.qwen3-vl-235b-a22b`, `zai.glm-4.7` |
+| Unreliable | 9 | `minimax.minimax-m2`, `mistral.ministral-3-14b-instruct`, `mistral.ministral-3-3b-instruct`, `mistral.ministral-3-8b-instruct`, `mistral.mistral-large-3-675b-instruct`, `nvidia.nemotron-nano-3-30b`, `openai.gpt-oss-120b-1:0`, `qwen.qwen3-next-80b-a3b`, `zai.glm-4.7-flash` |
+| Not usable | 11 | `google.gemma-3-12b-it`, `google.gemma-3-27b-it`, `google.gemma-3-4b-it`, `meta.llama3-70b-instruct-v1:0`, `meta.llama3-8b-instruct-v1:0`, `mistral.magistral-small-2509`, `mistral.mistral-7b-instruct-v0:2`, `mistral.mistral-large-2402-v1:0`, `mistral.mixtral-8x7b-instruct-v0:1`, `nvidia.nemotron-super-3-120b`, `qwen.qwen3-coder-30b-a3b-v1:0` |
+| Unsafe | 1 | `nvidia.nemotron-nano-12b-v2` |
+<!-- model-performance:end -->
 
 ## India / Mumbai models and `auto`
 
