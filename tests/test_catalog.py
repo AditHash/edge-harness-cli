@@ -237,3 +237,13 @@ def test_documented_context_sizes_auto_compaction(tmp_path: Path) -> None:
         )
     )
     assert agent.model.context_window_limit == 1_000_000
+
+
+def test_excluded_model_is_never_routed_but_stays_listed(tmp_path: Path) -> None:
+    from code_harness.catalog import AUTO_EXCLUDED
+
+    excluded = next(iter(AUTO_EXCLUDED))
+    other = CatalogModel("m.other", "mumbai", "x", 1000, "sdk", "ok")
+    bad = CatalogModel(excluded, "mumbai", "x", 999_999, "sdk", "ok")
+    assert choose_auto([bad, other], ["mumbai"]).model_id == "m.other"
+    assert choose_auto([bad], ["mumbai"]) is None

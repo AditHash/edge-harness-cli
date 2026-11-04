@@ -169,12 +169,20 @@ def build(listing: dict, probes: dict[str, str]) -> list[CatalogModel]:
     return models
 
 
+# Still selectable by name, but `auto` never routes to these. Evidence: docs/MODEL_PERFORMANCE.md.
+AUTO_EXCLUDED = frozenset({"moonshot.kimi-k2-thinking"})
+
+
+def _routable(model: CatalogModel) -> bool:
+    return model.tools == "ok" and model.model_id not in AUTO_EXCLUDED
+
+
 def choose_auto(
     models: Iterable[CatalogModel], tiers: Iterable[str] = TIERS
 ) -> CatalogModel | None:
     """Highest-context tool-capable model in the first allowed tier that has one."""
     allowed = list(tiers)
-    pool = [m for m in models if m.tools == "ok" and m.tier in allowed]
+    pool = [m for m in models if _routable(m) and m.tier in allowed]
     pool.sort(key=lambda m: (allowed.index(m.tier), -(m.context or 0), m.model_id))
     return pool[0] if pool else None
 
@@ -308,7 +316,14 @@ def resolve_auto(
     models, _ = load_catalog(state_dir, discover_fn=discover_fn)
     best = choose_auto(models, allowed)
     untested = sorted(
-        (m for m in models if m.tools == "untested" and m.tier in allowed and m.context),
+        (
+            m
+            for m in models
+            if m.tools == "untested"
+            and m.tier in allowed
+            and m.context
+            and m.model_id not in AUTO_EXCLUDED
+        ),
         key=lambda m: (allowed.index(m.tier), -(m.context or 0), m.model_id),
     )
     # Probe only candidates that could beat the current best (earlier tier or larger window).
@@ -337,6 +352,6 @@ def routing_candidates(state_dir: Path, tiers: Iterable[str] = TIERS) -> list[Ca
     models = build(
         load_cache(state_dir).get("listing", {}), load_cache(state_dir).get("probes", {})
     )
-    pool = [m for m in models if m.tools == "ok" and m.tier in allowed]
+    pool = [m for m in models if _routable(m) and m.tier in allowed]
     pool.sort(key=lambda m: (allowed.index(m.tier), -(m.context or 0), m.model_id))
     return pool[:MAX_ROUTE_CANDIDATES]
