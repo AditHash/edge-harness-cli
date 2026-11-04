@@ -4,7 +4,7 @@
 
 | Command | Purpose |
 | --- | --- |
-| `edge-harness` | Chat in the current folder. `--region/--model/--profile` are saved and reused; `--tui`, `--resume ID`, `--show-config`, `--no-login`, `--model auto`, `--residency india|mumbai|any`, `--list-models`, `--probe-models N`, `--continue`, `--skill NAME`, `--project-instructions`, `--mcp NAME`, `--mcp-config FILE`, `--mcp-add FILE`, `--mcp-remove NAME`, `--mcp-list`, `--manual`. Runs `aws login` when credentials are missing/expired (interactive only). |
+| `edge-harness` | Chat in the current folder. `--region/--model/--profile` are saved and reused; `--tui`, `--resume ID`, `--show-config`, `--no-login`, `--model auto`, `--residency india|mumbai|any`, `--list-models`, `--probe-models N`, `--continue`, `--skill NAME`, `--project-instructions`, `--mcp NAME`, `--mcp-config FILE`, `--mcp-add FILE`, `--mcp-remove NAME`, `--mcp-list`, `--manual`, `--settings`, `--set KEY=VALUE`, `--unset KEY`, `--refresh-prices`. Runs `aws login` when credentials are missing/expired (interactive only). |
 | `harness doctor` | Local checks only: Python, workspace, AWS settings present, sandbox backend, Git. No AWS call. |
 | `harness ask PROMPT` | One streamed turn. Options: `--workspace PATH`, `--project-instructions`, `--skill NAME` (repeatable), `--mcp-config FILE`. |
 | `harness chat` | Interactive Rich session. Same options plus `--resume SESSION_ID`. |
@@ -18,6 +18,8 @@ Non-interactive stdin never approves anything. At an approval prompt type `y` or
 | --- | --- |
 | `/help` | List commands |
 | `/new`, `/clear` | Start a new session (same workspace) |
+| `/cost` | Estimated session cost by model, with rate and source |
+| `/settings` | Open the settings page; a table when there is no terminal |
 | `/sessions` | Sessions in this folder: short id, last used, turns, first message |
 | `/resume ID` | Switch session; a unique id prefix of 4+ characters works |
 | `/image PATH [TEXT]` | Attach an image to the next message, or send it with TEXT |
@@ -50,6 +52,9 @@ Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_s
 | `SANDBOX_WSL_DISTRIBUTION` | `Ubuntu` | WSL distro (Windows) |
 | `HARNESS_STATE_DIR` | `~/.edge-harness` | Sessions database and MCP scratch |
 | `HARNESS_ENABLE_SUBAGENTS` | `true` | The `spawn_subagent` tool (extra model calls, counted in `/usage`) |
+| `HARNESS_SESSION_BUDGET_USD` | unset | Warn at 80% and 100% of the estimate; stops nothing |
+| `INPUT_PRICE_PER_MTOK`, `OUTPUT_PRICE_PER_MTOK` | unset | Your own rate for every model; needs both |
+| `CACHED_PRICE_PER_MTOK` | unset | Cached rate with your own prices; empty charges the input rate |
 | `HARNESS_ENABLE_HOST_COMMANDS` | `true` | The `run_on_host` tool; each command needs a typed `yes` |
 | `HARNESS_ENABLE_WEB` | `true` | The `web_fetch` tool; each fetch needs approval |
 | `HARNESS_SUBAGENT_MAX_PARALLEL` | `8` | Subagents running at once (1-32); others wait for a slot |

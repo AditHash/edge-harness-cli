@@ -94,6 +94,26 @@ grants no permissions. A model may not always follow it.
 mid-chat. Connecting and every tool call need approval. `--mcp-config <file>` connects one without
 saving.
 
+## Cost tracking
+
+Every model call shows an estimated cost, each turn shows turn and session totals, and the status
+bar keeps a running total. A spinner shows time and cost so far while the model works, and a reply
+shows its size and cost as it streams. Totals are saved with the session, so `--resume` continues
+them; `/sessions` lists them and `/cost` breaks them down by model.
+
+Prices are read from the AWS Price List API for `ap-south-1`, standard on-demand. A snapshot ships
+with the code, and `edge-harness --refresh-prices` updates it (free). A model with no listed price
+shows as unknown and is never guessed. These are estimates, not a bill: context summaries are not
+counted, and a model with no listed cached rate is charged the input rate.
+
+## Settings
+
+`edge-harness --settings` or `/settings` in chat opens the settings page for the model, residency,
+region, profile, limits, session budget, your own prices and tool switches. Without a terminal, use
+`edge-harness --set KEY=VALUE` and `--unset KEY`. Values are saved in
+`~/.edge-harness/settings.json`, never credentials, and an environment variable still wins. A session
+budget warns at 80% and 100% and stops nothing.
+
 ## Model performance
 
 [`harness-docs/docs/MODEL_PERFORMANCE.md`](harness-docs/docs/MODEL_PERFORMANCE.md) records how every Bedrock model did on the same scenarios. Refresh it with `uv run python scripts/model_matrix.py`, which makes billed model calls and rewrites the table below.

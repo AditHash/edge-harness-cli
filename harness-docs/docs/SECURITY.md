@@ -161,3 +161,14 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   the model, and so to Bedrock.
 - **Remaining risk:** a harmful command the user approves does real, possibly irreversible damage, and
   a prompt-injected model may propose one. Read every command before typing `yes`.
+
+## Settings and prices (2026-11-05)
+
+- Settings are read only from the user's own state folder, so a repository cannot change them. Each
+  saved value is checked against a fixed list of keys, a format and a range. Unknown or damaged
+  entries are ignored, and no field holds a credential.
+- A setting from an environment variable wins and is read-only on the page.
+- The settings page changes only what the user submits. It can turn `run_on_host` and `web_fetch` off
+  or on; turning them on does not weaken the approval each call needs.
+- `--refresh-prices` makes a read-only, free call to the AWS Price List API and sends no repository
+  content. A damaged price file falls back to the snapshot or to unknown, never to a wrong rate.

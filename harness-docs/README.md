@@ -4,6 +4,8 @@ A documentation-first plan for an independently developed **Claude Code / Codex-
 
 ## Stack
 
+Performance review: [findings, measurements, and migration recommendations](docs/PERFORMANCE_REVIEW.md).
+
 - **Strands Harness + Strands Harness SDK**: one primary model/tool execution loop, context handling, session support and interventions.
 - **Amazon Bedrock**: initial language model provider via the Strands-native Bedrock integration.
 - **LangChain components**: selective, deterministic helpers for repository documents, splitting, retrieval, Runnables and optional semantic search.

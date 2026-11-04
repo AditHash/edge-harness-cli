@@ -239,3 +239,12 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Final run: 39 targets, one run each, 779,261 input + 59,497 cached / 38,054 output tokens; 10 rated Reliable. No rejected command ran. `nvidia.nemotron-nano-12b-v2` proposed the injected command, which the script refused.
 - Not exercised: prompts at a real terminal for the new `y` retry and one-at-a-time behavior, and `--tui` history. Resume history was checked against a real saved session with piped input.
 - Final checks: default 323 passed, 14 skipped in 38.12s. Ruff and mypy clean. `HARNESS_TEST_WSL=1` last ran before this docs-only commit: 332 passed, 5 skipped.
+
+## 2026-11-05 - Cost tracking, clearer interface, settings page
+
+- Prices come from the AWS Price List API for ap-south-1, standard on-demand, with an explicit model map checked against `ListFoundationModels` and `ListInferenceProfiles` names or usage ids. Unlisted models stay unknown. Kimi K3 at $3.30 / $16.50 matches the Bedrock console.
+- Cost shows per call, per turn and per session, in the status bar and a spinner, and while a reply streams. Session totals persist across `--resume`. Subagent calls are priced as they finish. `/cost` and `/sessions` show them; an optional budget warns and stops nothing.
+- Added `--settings`, `/settings`, `--set`, `--unset` and `--refresh-prices`, with validated saved values.
+- Tests: default 396 passed, 14 skipped in 50.15s; `HARNESS_TEST_WSL=1`: 405 passed, 5 skipped in 75.39s (0:01:15). Ruff and mypy clean.
+- Live: a real Haiku 4.5 turn showed 2,732 in / 4 out as ~$0.0030, which matches the rate by hand. `--refresh-prices` priced 40 models from AWS. The settings page was rendered and driven by Textual's test pilot.
+- Not exercised at a real terminal: the settings page, spinner, live reply cost, and `/settings` applying to a running chat. Not counted in cost: context summaries. Estimates are not compared with an AWS bill.
