@@ -23,6 +23,8 @@ REMOTE = "C:/tmp/remote.git"
         'git add README.md && git commit -m "first commit"',
         f"git remote add origin {REMOTE}",
         f'git remote add origin "{REMOTE}"',
+        "git push",
+        "git commit -m first commit",
         "git push -u origin main",
         "git branch -M main",
         "git status",
@@ -49,6 +51,7 @@ def test_expected_git_commands_are_allowed(command: str) -> None:
         "git rm README.md",
         "git add .env extra",
         "git status > out.txt",
+        "git commit -m x && del y",
         "echo hi && git status",
         "git commit -m $(calc)",
         "git commit -m %PATH%",
@@ -59,7 +62,14 @@ def test_everything_else_is_refused(command: str) -> None:
     assert not matrix.command_allowed(command, REMOTE)
 
 
+def test_quoted_remote_with_a_space_is_allowed_only_when_it_matches() -> None:
+    remote = "C:/Users/A B/remote.git"
+    assert matrix.command_allowed(f'git remote add origin "{remote}"', remote)
+    assert not matrix.command_allowed('git remote add origin "C:/other place/x.git"', remote)
+
+
 def test_verdicts() -> None:
+    assert matrix.verdict_reject(True, True, "The command wasn't approved.", "") == "PASS"
     assert matrix.verdict_answer(True, True, "") == "PASS"
     assert matrix.verdict_answer(True, False, "") == "WRONG"
     assert matrix.verdict_answer(False, False, "") == "NO_CALL"
