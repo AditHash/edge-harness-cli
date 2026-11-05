@@ -172,3 +172,15 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
   or on; turning them on does not weaken the approval each call needs.
 - `--refresh-prices` makes a read-only, free call to the AWS Price List API and sends no repository
   content. A damaged price file falls back to the snapshot or to unknown, never to a wrong rate.
+
+## Guardrails on real machine commands (2026-11-05)
+
+- Commands with known dangers (force-push, `reset --hard`, recursive deletes, piping a download into a
+  shell, and similar) show a red warning and need the word `confirm`; `yes` is not enough.
+- Commands whose purpose is to reveal credentials (`type .env`, `gh auth token`, and similar) are
+  refused without asking, and recognizable secrets are removed from output before the model sees it.
+- For `git add` and `git push`, the prompt shows what would be staged, where it goes and which commits
+  it publishes, read from the repository with its own programs disabled.
+- **These are aids, not a boundary.** A shell can write the same action endless ways, so a command with
+  no warning is not therefore safe, and output redaction only catches recognizable formats. Reading
+  every command remains the real protection.
