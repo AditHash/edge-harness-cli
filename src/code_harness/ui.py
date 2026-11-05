@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-from code_harness.approvals import HOST_PREFIX
+from code_harness.approvals import HOST_PREFIX, HOST_WARNING
 from code_harness.streaming import ThinkFilter, tool_summary
 
 CODE_THEME = "monokai"
@@ -69,6 +69,18 @@ def command_panel(command: str) -> Panel:
 HISTORY_LIMIT = 20
 
 
+def _host_panel(text: str) -> Panel:
+    """A real machine command; known dangers stand out. All of this text is shown literally."""
+    body = Text()
+    for line in text.splitlines():
+        style = "bold red" if line.startswith(HOST_WARNING) else ""
+        body.append(line + "\n", style=style)
+    body.rstrip()
+    dangerous = HOST_WARNING in text
+    title = "DANGEROUS command on your REAL machine" if dangerous else "REAL machine"
+    return Panel(body, title=title, border_style="bold red", expand=True)
+
+
 def review_renderable(text: str) -> RenderableType:
     """Turn an approval display message into a panel; anything else stays plain text."""
     if text.startswith(DIFF_PREFIX):
@@ -79,7 +91,7 @@ def review_renderable(text: str) -> RenderableType:
         if len(lines) >= 2:
             return command_panel("\n".join(lines[1:-1]) or lines[1])
     if text.startswith(HOST_PREFIX):
-        return Panel(Text(text), title="REAL machine", border_style="bold red", expand=True)
+        return _host_panel(text)
     if text.startswith("MCP "):
         return Panel(Text(text), title="MCP", border_style="magenta", expand=True)
     return Text(text, style="dim" if text.startswith(("Applied under", "Run under")) else "")

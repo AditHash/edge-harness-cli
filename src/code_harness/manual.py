@@ -57,6 +57,10 @@ Inside chat
   /status               workspace and session id
   /exit, /quit          leave
 
+At a real machine prompt
+  yes                   run this command
+  confirm               run a command marked dangerous; yes is not enough
+
 At an approval prompt
   y, yes                approve this one
   a, all                approve the rest of this session (edits and commands separately)

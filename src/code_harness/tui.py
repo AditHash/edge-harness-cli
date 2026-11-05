@@ -97,7 +97,8 @@ class HarnessApp(App[None]):
         shown = "\n".join(self._shown)
         self._shown.clear()
         approved: bool = self.call_from_thread(self._ask, prompt, shown)  # type: ignore[arg-type]
-        return "yes" if approved else "no"
+        word = "confirm" if "Type confirm" in prompt else "yes"
+        return word if approved else "no"
 
     async def _ask(self, prompt: str, shown: str) -> bool:
         return bool(await self.push_screen_wait(ApprovalScreen(prompt, shown)))  # type: ignore[arg-type]

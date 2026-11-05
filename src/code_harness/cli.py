@@ -262,9 +262,7 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
     name = short_model_name(name)
     if configured == "auto":
         name = f"auto: {name}"
-    approvals = "ask"
-    if SESSION_APPROVALS.edits or SESSION_APPROVALS.commands:
-        approvals = "approve-all"
+    approvals = SESSION_APPROVALS.short_label()
     return status_segments(
         model=name,
         folder=settings.workspace.name or str(settings.workspace),
@@ -661,11 +659,14 @@ def _make_agent(
 
     def host_review(command: str) -> bool:
         ui = io()
+        from code_harness.git_tools import command_preview
+
         return review_host(
             command,
             interactive=ui.interactive,
             display=ui.display,
             read_reply=ui.read_reply,
+            preview=command_preview(Workspace(workspace), command),
         )
 
     settings = Settings(workspace=workspace)

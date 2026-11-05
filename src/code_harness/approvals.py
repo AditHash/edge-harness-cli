@@ -5,10 +5,12 @@ from dataclasses import dataclass, field
 from unicodedata import category
 from urllib.parse import urlsplit
 
+from code_harness.guardrails import command_risks
 from code_harness.proposals import Proposal
 from code_harness.workspace import WorkspaceError
 
 HOST_PREFIX = "Proposed command on your REAL machine:"
+HOST_WARNING = "WARNING:"
 MAX_HOST_PROMPTS = 3
 
 
@@ -38,6 +40,11 @@ class SessionApprovals:
         self.edits = False
         self.commands = False
         self.web_hosts.clear()
+
+    def short_label(self) -> str:
+        """For the status bar. Names what is automatic, because real machine commands never are."""
+        automatic = [name for name, on in (("edits", self.edits), ("sandbox", self.commands)) if on]
+        return " + ".join(automatic) + " auto" if automatic else "ask"
 
     def describe(self) -> str:
         edits = "approved for this session" if self.edits else "ask each time"
@@ -149,25 +156,33 @@ def review_host(
     interactive: bool,
     display: Callable[[str], None],
     read_reply: Callable[[str], str],
+    preview: str = "",
 ) -> bool:
-    """Approve one command on the real machine. Only a typed `yes` counts, every time."""
+    """Approve one command on the real machine. Only a typed word counts, every time.
+
+    A command with known dangers needs `confirm`, so a habitual `yes` cannot approve it.
+    """
     if not interactive:
         return False
+    risks = command_risks(command)
+    word = "confirm" if risks else "yes"
     try:
+        warning = "".join(f"{HOST_WARNING} {risk}\n" for risk in risks)
+        details = f"{preview}\n" if preview else ""
         display(
-            f"{HOST_PREFIX}\n{command}\n"
+            f"{HOST_PREFIX}\n{command}\n{details}{warning}"
             "NOT sandboxed: it runs with your files, logins and network, and the model reads its "
             "output. Check it did not come from repository or web content."
         )
         # A slip like `y` asks again instead of silently rejecting; it never approves.
         for _ in range(MAX_HOST_PROMPTS):
-            reply = read_reply("Run on your REAL machine? Type yes, or no to reject: ")
+            reply = read_reply(f"Run on your REAL machine? Type {word}, or no to reject: ")
             answer = reply.strip().casefold()
-            if answer == "yes":
+            if answer == word:
                 return True
             if answer in {"", "n", "no"}:
                 break
-            display("Not approved yet: type the full word yes, or no to reject.")
+            display(f"Not approved yet: type the full word {word}, or no to reject.")
         display("Rejected. The command did not run.")
         return False
     except (EOFError, KeyboardInterrupt, OSError):
