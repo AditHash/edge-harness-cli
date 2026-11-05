@@ -276,3 +276,18 @@ def test_chat_settings_without_a_terminal_shows_the_table(
     )
     assert result.exit_code == 0 and "session_budget" in result.output
     assert "--set KEY=VALUE" in result.output
+
+
+@pytest.mark.parametrize("width, help_shown", [(60, False), (80, False), (140, True)])
+def test_page_fits_the_terminal_width(width: int, help_shown: bool) -> None:
+    async def run() -> None:
+        app = SettingsApp({"region": "ap-south-1"}, {}, [("auto", "auto")])
+        async with app.run_test(size=(width, 40)) as pilot:
+            await pilot.pause()
+            field = app.query_one("#field-region")
+            assert field.region.right <= width
+            assert field.region.width >= 20
+            assert app.query(".help").first().display is help_shown
+            app.action_cancel()
+
+    asyncio.run(run())

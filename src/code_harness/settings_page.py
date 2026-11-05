@@ -160,7 +160,12 @@ class SettingsApp(App[dict[str, str | None] | None]):
     #message { height: auto; padding: 0 2; color: $warning; }
     #buttons { height: 3; padding: 0 2; }
     #buttons Button { margin-right: 2; }
+    .-narrow .name { width: 18; }
+    .-narrow .control { width: 1fr; }
+    .-narrow .help { display: none; }
     """
+    # Below this width the help text is hidden, so the controls stay whole and readable.
+    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] = [(0, "-narrow"), (100, "-wide")]
     BINDINGS: ClassVar[list[Any]] = [
         ("ctrl+s", "save", "Save"),
         ("escape", "cancel", "Cancel"),
