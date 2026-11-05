@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     harness_enable_tester: bool = False
     harness_enable_subagents: bool = True
     harness_enable_web: bool = True
+    harness_enable_browser: bool = True
+    harness_browser_local_ports: str = ""
+    harness_browser_headed: bool = False
     harness_enable_host_commands: bool = True
     harness_subagent_max_parallel: int = Field(default=8, ge=1, le=32)
     harness_subagent_turn_tokens: int = Field(default=2_000_000, ge=0)

@@ -76,6 +76,18 @@ GROUPS: tuple[tuple[str, tuple[FieldSpec, ...]], ...] = (
             ),
             FieldSpec("enable_web", "Web fetch", "Reads public pages, with approval.", "bool"),
             FieldSpec(
+                "enable_browser",
+                "Browser control",
+                "A throwaway local browser with no logins. Needs Playwright installed.",
+                "bool",
+            ),
+            FieldSpec(
+                "browser_local_ports",
+                "Browser local ports",
+                "Local ports it may open, such as 3000,5173. Empty allows none.",
+            ),
+            FieldSpec("browser_headed", "Show browser window", "Off runs it hidden.", "bool"),
+            FieldSpec(
                 "enable_host_commands",
                 "Real machine commands",
                 "run_on_host, with a typed yes per command. Full access to your machine.",

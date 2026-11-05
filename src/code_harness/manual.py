@@ -57,6 +57,10 @@ Inside chat
   /status               workspace and session id
   /exit, /quit          leave
 
+Browser control (optional; needs Playwright)
+  edge-harness --set browser_local_ports=3000   let it open your local app
+  python -m playwright install chromium          install its browser
+
 At a real machine prompt
   yes                   run this command
   confirm               run a command marked dangerous; yes is not enough

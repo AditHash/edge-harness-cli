@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
-from code_harness.approvals import HOST_PREFIX, HOST_WARNING
+from code_harness.approvals import BROWSER_PREFIX, HOST_PREFIX, HOST_WARNING
 from code_harness.streaming import ThinkFilter, tool_summary
 
 CODE_THEME = "monokai"
@@ -92,6 +92,8 @@ def review_renderable(text: str) -> RenderableType:
             return command_panel("\n".join(lines[1:-1]) or lines[1])
     if text.startswith(HOST_PREFIX):
         return _host_panel(text)
+    if text.startswith(BROWSER_PREFIX):
+        return Panel(Text(text), title="Browser", border_style="bright_blue", expand=True)
     if text.startswith("MCP "):
         return Panel(Text(text), title="MCP", border_style="magenta", expand=True)
     return Text(text, style="dim" if text.startswith(("Applied under", "Run under")) else "")
@@ -131,6 +133,13 @@ _TOOL_LOOK = {
     "run_sandboxed": ("Sandbox", "bright_magenta"),
     "run_on_host": ("Real machine", "bold bright_red"),
     "web_fetch": ("Fetch", "bright_blue"),
+    "browser_open": ("Browser open", "bright_blue"),
+    "browser_read": ("Browser read", "bright_blue"),
+    "browser_click": ("Browser click", "bright_blue"),
+    "browser_type": ("Browser type", "bright_blue"),
+    "browser_press": ("Browser key", "bright_blue"),
+    "browser_screenshot": ("Browser screenshot", "bright_blue"),
+    "browser_console": ("Browser console", "bright_blue"),
     "spawn_subagent": ("Subagent", "bright_green"),
 }
 

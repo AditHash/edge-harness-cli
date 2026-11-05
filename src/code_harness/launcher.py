@@ -24,6 +24,7 @@ console = Console()
 _WHOLE = re.compile(r"\d{1,12}")
 _DECIMAL = re.compile(r"\d{1,9}(\.\d{1,9})?")
 _SWITCH = re.compile(r"true|false")
+_PORTS = re.compile(r"\d{2,5}(,\d{2,5}){0,19}")
 FIELDS = {
     "region": ("AWS_REGION", re.compile(r"[a-z]{2}(-[a-z]+)+-\d{1,2}")),
     "model": ("BEDROCK_MODEL_ID", re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}")),
@@ -41,6 +42,9 @@ FIELDS = {
     "subagent_turn_tokens": ("HARNESS_SUBAGENT_TURN_TOKENS", _WHOLE),
     "enable_web": ("HARNESS_ENABLE_WEB", _SWITCH),
     "enable_host_commands": ("HARNESS_ENABLE_HOST_COMMANDS", _SWITCH),
+    "enable_browser": ("HARNESS_ENABLE_BROWSER", _SWITCH),
+    "browser_local_ports": ("HARNESS_BROWSER_LOCAL_PORTS", _PORTS),
+    "browser_headed": ("HARNESS_BROWSER_HEADED", _SWITCH),
 }
 # Limits that a bad saved value must not break at startup; they match config.Settings.
 RANGES = {

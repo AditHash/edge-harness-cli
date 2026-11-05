@@ -11,6 +11,7 @@ from code_harness.workspace import WorkspaceError
 
 HOST_PREFIX = "Proposed command on your REAL machine:"
 HOST_WARNING = "WARNING:"
+BROWSER_PREFIX = "Proposed browser action:"
 MAX_HOST_PROMPTS = 3
 
 
@@ -35,11 +36,13 @@ class SessionApprovals:
     edits: bool = False
     commands: bool = False
     web_hosts: set[str] = field(default_factory=set)
+    browser_hosts: set[str] = field(default_factory=set)
 
     def reset(self) -> None:
         self.edits = False
         self.commands = False
         self.web_hosts.clear()
+        self.browser_hosts.clear()
 
     def short_label(self) -> str:
         """For the status bar. Names what is automatic, because real machine commands never are."""
@@ -130,18 +133,21 @@ def review_fetch(
     display: Callable[[str], None],
     read_reply: Callable[[str], str],
     session: SessionApprovals | None = None,
+    in_browser: bool = False,
 ) -> bool:
-    """Approve one page fetch. A standing approval covers one host, never the whole web."""
+    """Approve one page fetch or browser visit. A standing approval covers one host only."""
     if not interactive:
         return False
     host = urlsplit(url).hostname or ""
     try:
-        display(f"Proposed web fetch (this site receives the full URL):\n{url}")
+        kind = "browser visit" if in_browser else "web fetch"
+        display(f"Proposed {kind} (this site receives the full URL):\n{url}")
         if session is not None and host in session.web_hosts:
             display("Fetched under your session approval (/approve ask to stop).")
             return True
         choices = f"[y]es / [a]ll from {host} this session / [n]o" if session else "[y]es / [n]o"
-        decision = _decide(read_reply(f"Fetch this page? {choices}: "))
+        question = "Open this page in the browser?" if in_browser else "Fetch this page?"
+        decision = _decide(read_reply(f"{question} {choices}: "))
         if decision == "all" and session is not None:
             session.web_hosts.add(host)
             return True
@@ -185,6 +191,39 @@ def review_host(
             display(f"Not approved yet: type the full word {word}, or no to reject.")
         display("Rejected. The command did not run.")
         return False
+    except (EOFError, KeyboardInterrupt, OSError):
+        return False
+
+
+def review_browser_action(
+    summary: str,
+    host: str,
+    *,
+    interactive: bool,
+    display: Callable[[str], None],
+    read_reply: Callable[[str], str],
+    session: SessionApprovals | None = None,
+) -> bool:
+    """Approve one click, typed text or key press.
+
+    Standing approval exists only for the user's own local app. On a public site a page can steer
+    the model, so every action there is asked about.
+    """
+    if not interactive:
+        return False
+    local = host in {"localhost", "127.0.0.1", "::1"}
+    try:
+        display(f"{BROWSER_PREFIX}\n{summary}")
+        if session is not None and host in session.browser_hosts:
+            display("Done under your session approval (/approve ask to stop).")
+            return True
+        offer_all = local and session is not None
+        choices = f"[y]es / [a]ll on {host} this session / [n]o" if offer_all else "[y]es / [n]o"
+        decision = _decide(read_reply(f"Do this in the browser? {choices}: "))
+        if decision == "all" and offer_all and session is not None:
+            session.browser_hosts.add(host)
+            return True
+        return decision == "yes"
     except (EOFError, KeyboardInterrupt, OSError):
         return False
 

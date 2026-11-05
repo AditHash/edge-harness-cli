@@ -19,12 +19,19 @@ from strands.types.tools import ToolContext
 from strands_harness import build_system_prompt, create_harness
 
 from code_harness import git_tools
+from code_harness.browser import (
+    BrowserSession,
+    UrlPolicy,
+    browser_available,
+    build_browser_tools,
+    parse_ports,
+)
 from code_harness.config import Settings
 from code_harness.host import SHELL_NAME, build_host_tool
 from code_harness.instructions import Guidance
 from code_harness.planning import render_plan, validate_plan
 from code_harness.platforms import sandbox_backend
-from code_harness.prompts import CORE_RULES, HOST_COMMAND_RULES
+from code_harness.prompts import BROWSER_RULES, CORE_RULES, HOST_COMMAND_RULES
 from code_harness.proposals import Proposal
 from code_harness.retrieval import WorkspaceRetriever, format_documents
 from code_harness.subagents import SubagentRole, build_spawn_tool
@@ -84,6 +91,8 @@ def create_agent(
     mcp_review: Callable[[str, str], bool] | None = None,
     review_web: Callable[[str], bool] | None = None,
     review_host: Callable[[str], bool] | None = None,
+    review_browser: Callable[[str, str], bool] | None = None,
+    review_browser_open: Callable[[str], bool] | None = None,
     notify: Callable[[str], None] = lambda text: None,
 ) -> Any:
     if model is None:
@@ -367,6 +376,40 @@ def create_agent(
         # Deliberately not offered to any subagent role.
         tools.append(build_host_tool(workspace.root, review_host, approval_gate, notify))
         instructions += "\n" + HOST_COMMAND_RULES.format(shell=SHELL_NAME)
+
+    browser_opener = review_browser_open or review_web
+    if (
+        settings.harness_enable_browser
+        and review_browser is not None
+        and browser_opener is not None
+        and browser_available()
+    ):
+        from code_harness.catalog import supports_images
+
+        browser_model = model
+
+        def can_read_images() -> bool:
+            try:
+                return supports_images(str(browser_model.get_config().get("model_id", "")))
+            except Exception:  # noqa: BLE001 - treated as a model that cannot read images
+                return False
+
+        # Deliberately not offered to any subagent role.
+        tools.extend(
+            build_browser_tools(
+                BrowserSession(
+                    UrlPolicy(parse_ports(settings.harness_browser_local_ports)),
+                    settings.harness_state_dir / "screenshots",
+                    settings.harness_browser_headed,
+                ),
+                browser_opener,
+                review_browser,
+                approval_gate,
+                can_read_images,
+                notify,
+            )
+        )
+        instructions += "\n" + BROWSER_RULES
 
     web_tools: list[Any] = []
     if settings.harness_enable_web and review_web is not None:
