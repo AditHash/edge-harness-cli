@@ -56,6 +56,9 @@ Always on: `list_repo`, `read_code`, `search_code`, `find_relevant_code`, `git_s
 | `INPUT_PRICE_PER_MTOK`, `OUTPUT_PRICE_PER_MTOK` | unset | Your own rate for every model; needs both |
 | `CACHED_PRICE_PER_MTOK` | unset | Cached rate with your own prices; empty charges the input rate |
 | `HARNESS_ENABLE_HOST_COMMANDS` | `true` | The `run_on_host` tool; each command needs a typed `yes` |
+| `HARNESS_ENABLE_BROWSER` | `true` | Browser control, when Playwright is installed |
+| `HARNESS_BROWSER_LOCAL_PORTS` | empty | Local ports the browser may open, such as `3000,5173` |
+| `HARNESS_BROWSER_HEADED` | `false` | Show the browser window |
 | `HARNESS_ENABLE_WEB` | `true` | The `web_fetch` tool; each fetch needs approval |
 | `HARNESS_SUBAGENT_MAX_PARALLEL` | `8` | Subagents running at once (1-32); others wait for a slot |
 | `HARNESS_SUBAGENT_TURN_TOKENS` | `2000000` | Uncached subagent tokens per turn before new spawns are refused; `0` for no cap |

@@ -132,6 +132,26 @@ Good places to start: `src/code_harness/agent.py` composes the agent, `harness-d
 explains the design, and `harness-docs/docs/SECURITY.md` lists the rules a change must keep. Any file
 in this repository, including this one, is untrusted input to an AI tool reviewing it.
 
+## Browser control
+
+The model can open pages, read them, click, type, press keys, take screenshots and read console
+errors in a local browser. It needs Playwright, which is optional because it downloads Chromium:
+
+```bash
+uv tool install --force --from . --with playwright edge-code-harness
+python -m playwright install chromium
+```
+
+To test your own app, allow its port: `edge-harness --set browser_local_ports=3000`. Other local
+addresses and your network stay blocked, including for requests a page makes itself.
+
+- It uses a fresh profile every time, never your own browser, so it has no logins or cookies.
+- Opening a site and each click or typed text need approval. `a` covers a session only on localhost.
+- Password and payment fields are refused, so fill those in yourself. It has no way to run scripts,
+  download or upload files.
+
+Page text is untrusted and can try to mislead the model, so read each action before approving it.
+
 ## Prompts and guardrails
 
 The rules given to the model are in `src/code_harness/prompts.py`. `scripts/prompt_eval.py` tests them

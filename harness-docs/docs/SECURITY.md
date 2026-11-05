@@ -184,3 +184,20 @@ sandbox. Model and repository text is rendered without Rich markup so it cannot 
 - **These are aids, not a boundary.** A shell can write the same action endless ways, so a command with
   no warning is not therefore safe, and output redaction only catches recognizable formats. Reading
   every command remains the real protection.
+
+## Browser control (2026-11-05)
+
+- Runs Playwright's own Chromium locally, in its normal sandbox, with a temporary profile. It never
+  touches the user's browser, so no logins or cookies are available to steal. Nothing is kept after the
+  session except screenshots in `<state>/screenshots`.
+- Every request a page makes is checked, including redirects, page resources and WebSockets. Only
+  public addresses and local ports the user listed are allowed; `file:` and the LAN are not.
+- Opening a site, each click, typed text and key press need approval. Standing approval exists only on
+  localhost. Without a terminal, all are refused.
+- Password, payment, one-time-code, file and hidden fields are refused. No tool runs scripts, and
+  downloads are off. Subagents never receive these tools.
+- **Remaining risks:** a page could re-point its domain to a private address after the check, which
+  this limits but does not prevent. Field detection reads labels a page controls, so a disguised field
+  can pass; check typed text before approving. An approved click acts on whatever the page shows then,
+  and a page can change right after it is read. Screenshots can hold whatever the page displays, and
+  are sent to the model provider when the model can read images.
