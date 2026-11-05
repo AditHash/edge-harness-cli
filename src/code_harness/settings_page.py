@@ -165,7 +165,7 @@ class SettingsApp(App[dict[str, str | None] | None]):
     .-narrow .help { display: none; }
     """
     # Below this width the help text is hidden, so the controls stay whole and readable.
-    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] = [(0, "-narrow"), (100, "-wide")]
+    HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (100, "-wide")]  # noqa: RUF012
     BINDINGS: ClassVar[list[Any]] = [
         ("ctrl+s", "save", "Save"),
         ("escape", "cancel", "Cancel"),
