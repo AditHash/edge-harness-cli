@@ -44,6 +44,7 @@ from code_harness.ui import (
     history_items,
     mark,
     short_duration,
+    short_model_name,
     tool_label,
     tool_row,
     user_bar,
@@ -108,8 +109,16 @@ def _failure_message(exc: BaseException) -> str:
             "Turn stopped: the model hit its output limit (BEDROCK_MAX_TOKENS). Nothing was "
             "changed by the unfinished step. Ask for a smaller change, or raise the limit."
         )
-    if name in {"ExpiredTokenException", "NoCredentialsError", "UnauthorizedSSOTokenError"}:
-        return "Turn failed: AWS credentials are missing or expired. Run `aws login`."
+    if name in {
+        "ExpiredTokenException",
+        "LoginRefreshRequired",
+        "NoCredentialsError",
+        "UnauthorizedSSOTokenError",
+    }:
+        return (
+            "Turn failed: AWS login expired or missing. Run `aws login` in another terminal, "
+            "then send your message again; this chat stays open."
+        )
     return f"Turn failed ({name})."
 
 
@@ -250,6 +259,7 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
     except Exception:  # noqa: BLE001 - display only
         active = None
     name = active if isinstance(active, str) and active else configured or "no model"
+    name = short_model_name(name)
     if configured == "auto":
         name = f"auto: {name}"
     approvals = "ask"
@@ -269,6 +279,7 @@ def _status(agent: Any, settings: Settings, configured: str | None, tracker: Any
             tracker.budget_state(), "fg:ansibrightgreen"
         ),
         fancy=mark(console.encoding) == "\u25cf",
+        width=shutil.get_terminal_size().columns,
     )
 
 

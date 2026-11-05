@@ -4,6 +4,7 @@ All model- or repository-supplied text is rendered as plain text (no markup), so
 inject styles or fake prompts.
 """
 
+import re
 from typing import Any
 
 from rich.console import Group, RenderableType
@@ -296,6 +297,20 @@ def bullet_row(body: RenderableType, bullet: str, style: str) -> Table:
     return grid
 
 
+def short_model_name(model: str) -> str:
+    """A model id without its region, provider, date and version, for tight spaces."""
+    name = re.sub(r"^(in|us|eu|apac|global)\.", "", model)
+    bare = re.sub(r"^[a-z0-9-]+\.", "", name, count=1)
+    bare = re.sub(r"-\d{8}.*$", "", bare)
+    bare = re.sub(r"-v?\d+(:\d+)$", "", bare)
+    # `deepseek.v3.2` would become a bare version number, which names nothing.
+    return bare if bare and not re.match(r"v\d", bare) else name
+
+
+# Dropped first to last when the bar does not fit. The model and cost always stay.
+_BAR_DROP_ORDER = ("help", "cached", "input", "output", "folder", "gauge", "used", "approvals")
+
+
 def status_segments(
     *,
     model: str,
@@ -309,13 +324,14 @@ def status_segments(
     cost: str = "",
     cost_style: str = "fg:ansibrightgreen",
     fancy: bool = False,
+    width: int | None = None,
 ) -> list[tuple[str, str]]:
-    """Bottom status bar as (style, text) pairs for prompt_toolkit."""
+    """Bottom status bar as (style, text) pairs for prompt_toolkit, fitted to `width` if given."""
     separator = ("fg:ansibrightblack", " · ")
-    parts: list[tuple[str, str]] = [
-        ("fg:ansicyan bold", model),
-        ("fg:ansigreen", folder),
-        ("fg:ansimagenta", approvals),
+    parts: list[tuple[str, str, str]] = [
+        ("model", "fg:ansicyan bold", model),
+        ("folder", "fg:ansigreen", folder),
+        ("approvals", "fg:ansimagenta", approvals),
     ]
     if context_limit:
         used = context_used or 0
@@ -323,21 +339,32 @@ def status_segments(
         color = "ansigreen" if left > 40 else "ansiyellow" if left > 15 else "ansired"
         if fancy:
             filled = min(8, round(8 * used / context_limit))
-            parts.append((f"fg:{color}", "\u25b0" * filled + "\u25b1" * (8 - filled)))
-        parts.append((f"fg:{color}", f"Context {left}% left"))
-        parts.append(("fg:ansiwhite", f"{short_tokens(used)} / {short_tokens(context_limit)}"))
-    parts.append(("fg:ansiblue", f"{short_tokens(input_tokens)} in"))
+            parts.append(("gauge", f"fg:{color}", "\u25b0" * filled + "\u25b1" * (8 - filled)))
+        parts.append(("context", f"fg:{color}", f"Context {left}% left"))
+        parts.append(
+            ("used", "fg:ansiwhite", f"{short_tokens(used)} / {short_tokens(context_limit)}")
+        )
+    parts.append(("input", "fg:ansiblue", f"{short_tokens(input_tokens)} in"))
     if cached_tokens:
-        parts.append(("fg:ansimagenta", f"{short_tokens(cached_tokens)} cached"))
-    parts.append(("fg:ansigreen", f"{short_tokens(output_tokens)} out"))
+        parts.append(("cached", "fg:ansimagenta", f"{short_tokens(cached_tokens)} cached"))
+    parts.append(("output", "fg:ansigreen", f"{short_tokens(output_tokens)} out"))
     if cost:
-        parts.append((cost_style, cost))
-    parts.append(("fg:ansibrightblack", "/help"))
+        parts.append(("cost", cost_style, cost))
+    parts.append(("help", "fg:ansibrightblack", "/help"))
+
+    def length() -> int:
+        return sum(len(text) for _, _, text in parts) + 3 * (len(parts) - 1)
+
+    if width is not None:
+        for name in _BAR_DROP_ORDER:
+            if length() < width:
+                break
+            parts = [part for part in parts if part[0] != name]
     segments: list[tuple[str, str]] = []
-    for index, part in enumerate(parts):
+    for index, (_, style, text) in enumerate(parts):
         if index:
             segments.append(separator)
-        segments.append(part)
+        segments.append((style, text))
     return segments
 
 

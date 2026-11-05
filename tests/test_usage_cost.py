@@ -245,3 +245,52 @@ def test_tool_rows_and_help() -> None:
     assert "Real machine git push" in _render(ui.tool_row("run_on_host git push", "utf-8"))
     assert "mcp_thing x" in _render(ui.tool_row("mcp_thing x", "utf-8"))
     assert "/cost" in _render(ui.help_table())
+
+
+@pytest.mark.parametrize(
+    "model, short",
+    [
+        ("in.anthropic.claude-haiku-4-5-20251001-v1:0", "claude-haiku-4-5"),
+        ("in.moonshotai.kimi-k3", "kimi-k3"),
+        ("qwen.qwen3-coder-480b-a35b-v1:0", "qwen3-coder-480b-a35b"),
+        ("openai.gpt-oss-120b-1:0", "gpt-oss-120b"),
+        ("zai.glm-5", "glm-5"),
+        ("deepseek.v3.2", "deepseek.v3.2"),
+        ("deepseek.v3-v1:0", "deepseek.v3-v1:0"),
+        ("auto", "auto"),
+        ("no model", "no model"),
+    ],
+)
+def test_short_model_names(model: str, short: str) -> None:
+    assert ui.short_model_name(model) == short
+
+
+@pytest.mark.parametrize("width", [200, 130, 100, 80, 60, 40])
+def test_status_bar_fits_and_always_keeps_model_and_cost(width: int) -> None:
+    segments = ui.status_segments(
+        model="claude-haiku-4-5",
+        folder="deepagent-demo",
+        approvals="approve-all",
+        context_used=50_000,
+        context_limit=200_000,
+        input_tokens=12_345,
+        cached_tokens=6_789,
+        output_tokens=1_234,
+        cost="~$1.2345",
+        fancy=True,
+        width=width,
+    )
+    text = "".join(part for _, part in segments)
+    assert "claude-haiku-4-5" in text and "~$1.2345" in text
+    assert len(text) < width or width <= 40
+    if width >= 200:
+        assert "/help" in text and "6.8K cached" in text
+    assert not text.endswith(" · ")
+
+
+def test_expired_login_says_what_to_do() -> None:
+    class LoginRefreshRequired(Exception):
+        pass
+
+    message = cli._failure_message(LoginRefreshRequired("secret provider text"))
+    assert "aws login" in message and "secret" not in message

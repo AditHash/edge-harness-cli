@@ -198,7 +198,8 @@ def test_status_segments_show_context_left_and_tokens() -> None:
     assert "cached" not in "".join(part for _, part in low)
 
 
-def test_status_uses_live_model_and_context(tmp_path) -> None:
+def test_status_uses_live_model_and_context(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("COLUMNS", "200")
     from types import SimpleNamespace
 
     from code_harness import cli
@@ -217,7 +218,7 @@ def test_status_uses_live_model_and_context(tmp_path) -> None:
     text = "".join(
         part for _, part in cli._status(agent, Settings(workspace=tmp_path), "auto", tracker)
     )
-    assert "auto: in.moonshotai.kimi-k3" in text
+    assert "auto: kimi-k3" in text
     assert tmp_path.name in text
     assert "Context 90% left" in text and "1.0K in" in text and "200 cached" in text
 
