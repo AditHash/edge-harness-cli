@@ -256,3 +256,8 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Fake model, because that login expired: 17 of 17 checks at 130 and 60 columns, and all but two at 90 columns in an earlier run of the same script (the spinner check, since that fake answered instantly, and a screen-reading check fixed later). Whole cost in the status bar, a budget set on the page applying to the running chat with its warning, and the page entering and leaving the alternate screen. The fake replaces only the Bedrock model.
 - Found and fixed: the status bar cut off the cost at 130 columns; `LoginRefreshRequired` gave no instruction; the settings page clipped at 60 columns.
 - Not exercised: these with a real model after the status bar fix, real terminal emulators such as Windows Terminal by eye, and macOS or Linux terminals. The screen reader has no alternate screen, so leftover page text it showed at 60 columns was not visually confirmed gone; the stream shows the page leaving the alternate screen.
+
+## 2026-11-05 - Real model terminal run
+
+- After `aws login`, the same pseudo-terminal script passed 17 of 17 checks with real Haiku 4.5 at 130, 90 and 60 columns, including the status bar fix and a budget set on the settings page warning in the running chat. This supersedes the partial 90 column result above. A real turn of 2,930 in / 4 out showed ~$0.0032, which matches the rate by hand.
+- Still not checked: Windows Terminal by eye, and macOS or Linux terminals.
