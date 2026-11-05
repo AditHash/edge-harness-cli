@@ -248,3 +248,11 @@ This file is an **evidence log**, not a place to report intended work as complet
 - Tests: default 396 passed, 14 skipped in 50.15s; `HARNESS_TEST_WSL=1`: 405 passed, 5 skipped in 75.39s (0:01:15). Ruff and mypy clean.
 - Live: a real Haiku 4.5 turn showed 2,732 in / 4 out as ~$0.0030, which matches the rate by hand. `--refresh-prices` priced 40 models from AWS. The settings page was rendered and driven by Textual's test pilot.
 - Not exercised at a real terminal: the settings page, spinner, live reply cost, and `/settings` applying to a running chat. Not counted in cost: context summaries. Estimates are not compared with an AWS bill.
+
+## 2026-11-05 - Real terminal checks
+
+- Drove the real CLI in a Windows pseudo-terminal with real keystrokes, reading the rendered screen (`.live-smoke/pty_test.py`, not committed).
+- Real Haiku 4.5: spinner, live reply cost, turn cost footer, `/cost`, `y` asking again, `yes` running `git --version` with its output shown, and the resume command on exit. The AWS login then expired.
+- Fake model, because that login expired: 17 of 17 checks at 130 and 60 columns, and all but two at 90 columns in an earlier run of the same script (the spinner check, since that fake answered instantly, and a screen-reading check fixed later). Whole cost in the status bar, a budget set on the page applying to the running chat with its warning, and the page entering and leaving the alternate screen. The fake replaces only the Bedrock model.
+- Found and fixed: the status bar cut off the cost at 130 columns; `LoginRefreshRequired` gave no instruction; the settings page clipped at 60 columns.
+- Not exercised: these with a real model after the status bar fix, real terminal emulators such as Windows Terminal by eye, and macOS or Linux terminals. The screen reader has no alternate screen, so leftover page text it showed at 60 columns was not visually confirmed gone; the stream shows the page leaving the alternate screen.
